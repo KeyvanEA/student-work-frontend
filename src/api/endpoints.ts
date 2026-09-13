@@ -2,27 +2,37 @@
  * تنها محل تعریف مسیرهای API.
  * هر مسیر اینجا دقیقاً معادل یک route ثبت‌شده در routes/api.php بک‌اند است.
  * ⚠️ هیچ endpoint خیالی اینجا اضافه نشود.
+ *
+ * آخرین sync با routes/api.php (commit fe89683).
+ * مسیرهای Admin عمداً اینجا نیستند؛ بک‌اند هنوز آن‌ها را ندارد و در
+ * src/admin/api/plannedEndpoints.ts به‌عنوان «طراحی‌شده ولی پیاده‌نشده» نگهداری می‌شوند.
  */
 
 export const API_PREFIX = '/api'
 
 export const endpoints = {
-  // ---- Authentication (routes/api.php) ----
+  // ---- Authentication ----
   login: () => `${API_PREFIX}/login`,
   logout: () => `${API_PREFIX}/logout`,
   currentUser: () => `${API_PREFIX}/user`,
 
+  // ---- Dashboard ----
+  dashboard: () => `${API_PREFIX}/dashboard`,
+
   // ---- Profile ----
   profile: () => `${API_PREFIX}/profile`,
   profileSkills: () => `${API_PREFIX}/profile/skills`,
+  profileSatisfaction: () => `${API_PREFIX}/profile/satisfaction`,
   skills: () => `${API_PREFIX}/skills`,
 
   // ---- Tasks ----
   tasks: () => `${API_PREFIX}/tasks`,
+  myTasks: () => `${API_PREFIX}/tasks/mine`,
   task: (taskId: number | string) => `${API_PREFIX}/tasks/${taskId}`,
   taskCancel: (taskId: number | string) => `${API_PREFIX}/tasks/${taskId}/cancel`,
 
   // ---- Applications ----
+  applications: () => `${API_PREFIX}/applications`,
   taskApplications: (taskId: number | string) => `${API_PREFIX}/tasks/${taskId}/applications`,
   application: (applicationId: number | string) => `${API_PREFIX}/applications/${applicationId}`,
   applicationAccept: (applicationId: number | string) =>
@@ -31,10 +41,14 @@ export const endpoints = {
     `${API_PREFIX}/applications/${applicationId}/reject`,
 
   // ---- Projects ----
+  projects: () => `${API_PREFIX}/projects`,
   project: (projectId: number | string) => `${API_PREFIX}/projects/${projectId}`,
   projectPayment: (projectId: number | string) => `${API_PREFIX}/projects/${projectId}/payment`,
   projectDeliveries: (projectId: number | string) =>
     `${API_PREFIX}/projects/${projectId}/deliveries`,
+  projectComplaints: (projectId: number | string) =>
+    `${API_PREFIX}/projects/${projectId}/complaints`,
+  projectReviews: (projectId: number | string) => `${API_PREFIX}/projects/${projectId}/reviews`,
 
   // ---- Deliveries ----
   delivery: (deliveryId: number | string) => `${API_PREFIX}/deliveries/${deliveryId}`,
@@ -44,4 +58,12 @@ export const endpoints = {
     `${API_PREFIX}/deliveries/${deliveryId}/files/${fileId}/preview`,
   deliveryFileDownload: (deliveryId: number | string, fileId: number | string) =>
     `${API_PREFIX}/deliveries/${deliveryId}/files/${fileId}/download`,
+
+  // ---- Complaints ----
+  complaints: () => `${API_PREFIX}/complaints`,
+  relatedComplaints: () => `${API_PREFIX}/complaints/related`,
+  complaint: (complaintId: number | string) => `${API_PREFIX}/complaints/${complaintId}`,
+
+  // ---- Notifications ----
+  notifications: () => `${API_PREFIX}/notifications`,
 } as const

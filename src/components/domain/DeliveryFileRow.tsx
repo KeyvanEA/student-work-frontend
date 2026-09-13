@@ -1,6 +1,11 @@
 import { useState } from 'react'
 import { ApiError } from '@/api/client'
-import { downloadDeliveryFile, isPreviewableMime, openDeliveryFilePreview } from '@/api/files'
+import {
+  downloadDeliveryFile,
+  isPreviewableMime,
+  openDeliveryFilePreview,
+  PopupBlockedError,
+} from '@/api/files'
 import { Button } from '@/components/ui/Button'
 import { IconDownload, IconEye, IconFile } from '@/components/ui/Icons'
 import { useToast } from '@/components/ui/Toast'
@@ -30,8 +35,10 @@ export function DeliveryFileRow({
         toast.success('دانلود فایل آغاز شد.')
       }
     } catch (error) {
-      const apiError = error instanceof ApiError ? error : null
-      toast.error(apiError?.message ?? 'دریافت فایل ناموفق بود.')
+      // مسدود شدن پاپ‌آپ نباید پیش‌نمایش را به دانلود تبدیل کند؛ فقط به کاربر اطلاع می‌دهیم.
+      if (error instanceof PopupBlockedError) toast.error(error.message)
+      else if (error instanceof ApiError) toast.error(error.message)
+      else toast.error('دریافت فایل ناموفق بود.')
     } finally {
       setPending(null)
     }

@@ -1,6 +1,11 @@
 import { apiRequest, buildFormData } from './client'
 import { endpoints } from './endpoints'
-import type { Application, Paginated } from '@/types/models'
+import type {
+  AcceptApplicationResponse,
+  Application,
+  ApplicationListType,
+  Paginated,
+} from '@/types/models'
 
 /** GET /api/tasks/{task}/applications — فقط صاحب تسک، فقط وضعیت pending */
 export async function fetchTaskApplications(
@@ -15,7 +20,24 @@ export async function fetchTaskApplications(
   return data.applications
 }
 
-/** GET /api/applications/{id} — ⚠️ بک‌اند فقط به صاحب تسک اجازه می‌دهد (کارجو ۴۰۳ می‌گیرد) */
+/**
+ * GET /api/applications?type=sent|received
+ * `type` اجباری است؛ بدون آن بک‌اند ۴۲۲ می‌دهد.
+ */
+export async function fetchApplications(
+  type: ApplicationListType,
+  page = 1,
+  signal?: AbortSignal,
+): Promise<Paginated<Application>> {
+  const query = new URLSearchParams({ type, page: String(page) })
+  const data = await apiRequest<{ applications: Paginated<Application> }>(
+    `${endpoints.applications()}?${query.toString()}`,
+    { signal },
+  )
+  return data.applications
+}
+
+/** GET /api/applications/{id} — صاحب تسک یا خودِ ارسال‌کنندهٔ درخواست */
 export async function fetchApplication(
   applicationId: number | string,
   signal?: AbortSignal,
@@ -42,10 +64,14 @@ export async function applyToTask(
   )
 }
 
+/**
+ * PATCH /api/applications/{id}/accept
+ * پاسخ شامل پروژهٔ تازه‌ساخته‌شده است؛ از روی آن مستقیماً به /projects/{id} می‌رویم.
+ */
 export async function acceptApplication(
   applicationId: number | string,
-): Promise<{ message: string }> {
-  return apiRequest<{ message: string }>(endpoints.applicationAccept(applicationId), {
+): Promise<AcceptApplicationResponse> {
+  return apiRequest<AcceptApplicationResponse>(endpoints.applicationAccept(applicationId), {
     method: 'PATCH',
   })
 }

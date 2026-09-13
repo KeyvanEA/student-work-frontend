@@ -170,3 +170,87 @@ export const IconArrowLeft = (p: IconProps) => (
     <path d="M15 6l-6 6 6 6" />
   </Base>
 )
+
+export const IconGrid = (p: IconProps) => (
+  <Base {...p}>
+    <rect x="3.5" y="3.5" width="7" height="7" rx="2" />
+    <rect x="13.5" y="3.5" width="7" height="7" rx="2" />
+    <rect x="3.5" y="13.5" width="7" height="7" rx="2" />
+    <rect x="13.5" y="13.5" width="7" height="7" rx="2" />
+  </Base>
+)
+
+export const IconBolt = (p: IconProps) => (
+  <Base {...p}>
+    <path d="M13 2.5 4.5 13.5H11l-1 8 8.5-11H12l1-8Z" />
+  </Base>
+)
+
+export const IconArchive = (p: IconProps) => (
+  <Base {...p}>
+    <rect x="3" y="4" width="18" height="4.5" rx="1.5" />
+    <path d="M5 8.5V19a1.5 1.5 0 0 0 1.5 1.5h11A1.5 1.5 0 0 0 19 19V8.5M10 12.5h4" />
+  </Base>
+)
+
+export const IconHandshake = (p: IconProps) => (
+  <Base {...p}>
+    <path d="m8 11.5 2.4-2.4a1.6 1.6 0 0 1 2.2 0l3.9 3.8" />
+    <path d="M3.5 9 7 5.5h4l2 2-2.5 2.5a1.4 1.4 0 0 1-2 0L7.5 9" />
+    <path d="M13 7.5h3.5L20.5 11M20.5 11v4.5L17 19l-3-3M3.5 9v5.5L7 18l2-2" />
+  </Base>
+)
+
+export const IconWarning = (p: IconProps) => (
+  <Base {...p}>
+    <path d="M10.6 4.2 2.9 17.5A1.6 1.6 0 0 0 4.3 20h15.4a1.6 1.6 0 0 0 1.4-2.5L13.4 4.2a1.6 1.6 0 0 0-2.8 0Z" />
+    <path d="M12 9.5v4M12 16.5h.01" />
+  </Base>
+)
+
+export const IconSmile = (p: IconProps) => (
+  <Base {...p}>
+    <circle cx="12" cy="12" r="8.5" />
+    <path d="M9 14.2a4 4 0 0 0 6 0M9.2 9.8h.01M14.8 9.8h.01" />
+  </Base>
+)
+
+export const IconUsers = (p: IconProps) => (
+  <Base {...p}>
+    <circle cx="9.5" cy="8" r="3.2" />
+    <path d="M3.5 19.5a6 6 0 0 1 12 0M16 5.2a3.2 3.2 0 0 1 0 5.6M17.5 14.3a6 6 0 0 1 3 5.2" />
+  </Base>
+)
+
+export const IconTag = (p: IconProps) => (
+  <Base {...p}>
+    <path d="M3.5 11.2V5a1.5 1.5 0 0 1 1.5-1.5h6.2a1.5 1.5 0 0 1 1.06.44l7.3 7.3a1.5 1.5 0 0 1 0 2.12l-6.2 6.2a1.5 1.5 0 0 1-2.12 0l-7.3-7.3a1.5 1.5 0 0 1-.44-1.06Z" />
+    <path d="M7.8 7.8h.01" />
+  </Base>
+)
+
+export const IconTool = (p: IconProps) => (
+  <Base {...p}>
+    <path d="M14.5 6.5a3.8 3.8 0 0 1 5 5l-9 9a2.1 2.1 0 0 1-3-3l9-9a3.8 3.8 0 0 1-2-2Z" />
+    <path d="M9 4 5 5 4 9l3.5 3.5" />
+  </Base>
+)
+
+export const IconPackage = (p: IconProps) => (
+  <Base {...p}>
+    <path d="m12 3 8 4v10l-8 4-8-4V7l8-4Z" />
+    <path d="m4 7 8 4 8-4M12 11v10" />
+  </Base>
+)
+
+export const IconChevronDown = (p: IconProps) => (
+  <Base {...p}>
+    <path d="m6 9 6 6 6-6" />
+  </Base>
+)
+
+export const IconMenu = (p: IconProps) => (
+  <Base {...p}>
+    <path d="M4 7h16M4 12h16M4 17h16" />
+  </Base>
+)

@@ -1,18 +1,19 @@
 import { Link, useLocation } from 'react-router-dom'
 import { cn } from '@/lib/cn'
-import { isNavActive, primaryNav } from './navItems'
+import { bottomNav, isPathActive } from './navItems'
 
+/** ناوبری پایین صفحه در موبایل — میان‌بر؛ فهرست کامل در کشوی ناوبری است. */
 export function BottomNav() {
   const { pathname } = useLocation()
 
   return (
     <nav
       className="safe-bottom fixed inset-x-0 bottom-0 z-40 border-t border-ink-200 bg-white/95 backdrop-blur lg:hidden"
-      aria-label="ناوبری اصلی"
+      aria-label="ناوبری سریع"
     >
       <ul className="mx-auto flex max-w-lg items-stretch justify-between px-1 pt-1">
-        {primaryNav.map((item) => {
-          const active = isNavActive(item, pathname)
+        {bottomNav.map((item) => {
+          const active = item.match.some((prefix) => isPathActive(pathname, prefix))
           return (
             <li key={item.to} className="flex-1">
               <Link

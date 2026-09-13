@@ -1,26 +1,30 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ApiError } from '@/api/client'
-import { submitDelivery } from '@/api/deliveries'
+import { createComplaint } from '@/api/complaints'
+import { fetchProjectDeliveries, submitDelivery } from '@/api/deliveries'
 import { fetchProject, payProject } from '@/api/projects'
+import { submitReview } from '@/api/reviews'
 import { useAuth } from '@/auth/AuthContext'
+import { DeliveryListRow } from '@/components/domain/DeliveryListRow'
 import { DetailList, DetailRow } from '@/components/domain/DetailList'
 import { FlowStepper, PROJECT_FLOW_STEPS, projectFlowIndex } from '@/components/domain/FlowStepper'
-import { IdLookupCard } from '@/components/domain/IdLookupCard'
-import { RecentEntries } from '@/components/domain/RecentEntries'
 import { StatusBadge } from '@/components/domain/StatusBadge'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Alert } from '@/components/ui/Alert'
 import { Avatar } from '@/components/ui/Avatar'
-import { Button } from '@/components/ui/Button'
+import { Button, LinkButton } from '@/components/ui/Button'
 import { Card, CardBody, CardHeader } from '@/components/ui/Card'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
+import { EmptyState } from '@/components/ui/EmptyState'
 import { ErrorState } from '@/components/ui/ErrorState'
 import { Field } from '@/components/ui/Field'
 import { FileInput } from '@/components/ui/FileInput'
-import { IconClock, IconMoney, IconUpload, IconWallet } from '@/components/ui/Icons'
+import { IconClock, IconMoney, IconSmile, IconUpload, IconWallet, IconWarning } from '@/components/ui/Icons'
+import { Input } from '@/components/ui/Input'
 import { Modal } from '@/components/ui/Modal'
-import { SkeletonDetail } from '@/components/ui/Skeleton'
+import { Pagination } from '@/components/ui/Pagination'
+import { SkeletonDetail, SkeletonList } from '@/components/ui/Skeleton'
 import { Textarea } from '@/components/ui/Textarea'
 import { useToast } from '@/components/ui/Toast'
 import { useApiResource } from '@/hooks/useApiResource'
@@ -28,7 +32,6 @@ import { useDocumentTitle } from '@/hooks/useDocumentTitle'
 import { useMutation } from '@/hooks/useMutation'
 import { deadlineInfo, formatDateTime, formatToman, toPersianDigits } from '@/lib/format'
 import { metaOf, paymentStatusMeta, projectStatusMeta } from '@/lib/labels'
-import { rememberEntry } from '@/lib/recent'
 
 export default function ProjectDetailPage() {
   const { projectId = '' } = useParams()
@@ -39,24 +42,29 @@ export default function ProjectDetailPage() {
   const loader = useCallback((signal: AbortSignal) => fetchProject(projectId, signal), [projectId])
   const project = useApiResource(loader, [projectId])
 
+  const [deliveriesPage, setDeliveriesPage] = useState(1)
+  const deliveriesLoader = useCallback(
+    (signal: AbortSignal) => fetchProjectDeliveries(projectId, deliveriesPage, signal),
+    [projectId, deliveriesPage],
+  )
+  const deliveries = useApiResource(deliveriesLoader, [projectId, deliveriesPage], {
+    enabled: Boolean(project.data),
+  })
+
   const task = project.data?.application?.task
   useDocumentTitle(task?.title ? `پروژه: ${task.title}` : 'پروژه')
 
   const [deliveryOpen, setDeliveryOpen] = useState(false)
   const [paymentOpen, setPaymentOpen] = useState(false)
+  const [complaintOpen, setComplaintOpen] = useState(false)
+  const [reviewChoice, setReviewChoice] = useState<boolean | null>(null)
+  const [reviewSubmitted, setReviewSubmitted] = useState(false)
+
   const [description, setDescription] = useState('')
   const [files, setFiles] = useState<File[]>([])
-
-  useEffect(() => {
-    if (project.data) {
-      rememberEntry({
-        id: project.data.id,
-        kind: 'project',
-        title: project.data.application?.task?.title ?? `پروژه #${project.data.id}`,
-        subtitle: metaOf(projectStatusMeta, project.data.status).label,
-      })
-    }
-  }, [project.data])
+  const [complaintTitle, setComplaintTitle] = useState('')
+  const [complaintBody, setComplaintBody] = useState('')
+  const [complaintFiles, setComplaintFiles] = useState<File[]>([])
 
   const deliveryMutation = useMutation(
     () => submitDelivery(projectId, { description: description.trim(), files }),
@@ -67,6 +75,8 @@ export default function ProjectDetailPage() {
         setDescription('')
         setFiles([])
         project.reload()
+        setDeliveriesPage(1)
+        deliveries.reload()
       },
       onError: (error) => toast.error(error.message),
     },
@@ -84,10 +94,47 @@ export default function ProjectDetailPage() {
     },
   })
 
+  const complaintMutation = useMutation(
+    () =>
+      createComplaint(projectId, {
+        title: complaintTitle.trim(),
+        description: complaintBody.trim(),
+        files: complaintFiles,
+      }),
+    {
+      onSuccess: (result) => {
+        toast.success(result.message)
+        setComplaintOpen(false)
+        setComplaintTitle('')
+        setComplaintBody('')
+        setComplaintFiles([])
+        project.reload()
+      },
+      onError: (error) => toast.error(error.message),
+    },
+  )
+
+  const reviewMutation = useMutation(
+    (isSatisfied: boolean) => submitReview(projectId, isSatisfied),
+    {
+      onSuccess: (result) => {
+        toast.success(result.message)
+        setReviewChoice(null)
+        setReviewSubmitted(true)
+      },
+      onError: (error) => {
+        toast.error(error.message)
+        setReviewChoice(null)
+        // ۴۰۹ یعنی قبلاً ثبت شده — همان را در UI منعکس می‌کنیم
+        if (error.status === 409) setReviewSubmitted(true)
+      },
+    },
+  )
+
   if (project.loading) {
     return (
       <div>
-        <PageHeader title="پروژه" backTo="/projects" backLabel="همه پروژه‌ها" />
+        <PageHeader title="پروژه" backTo="/projects/active/worker" backLabel="پروژه‌ها" />
         <SkeletonDetail />
       </div>
     )
@@ -96,18 +143,15 @@ export default function ProjectDetailPage() {
   if (project.error || !project.data) {
     return (
       <div className="space-y-4">
-        <PageHeader title="پروژه" backTo="/projects" backLabel="همه پروژه‌ها" />
+        <PageHeader title="پروژه" backTo="/projects/active/worker" backLabel="پروژه‌ها" />
         <ErrorState
           error={project.error ?? new ApiError(404, 'پروژه پیدا نشد.')}
           onRetry={project.reload}
         />
-        <IdLookupCard
-          title="شناسه دیگری را امتحان کنید"
-          description="فقط کارفرما و کارجوی همان پروژه اجازهٔ مشاهده دارند."
-          label="شناسه پروژه"
-          placeholder="مثلاً ۱"
-          basePath="/projects"
-        />
+        <Alert tone="info">
+          فقط کارفرما و کارجوی همان پروژه اجازهٔ مشاهده دارند. فهرست پروژه‌های خودتان را از منوی
+          «پروژه‌های فعال» یا «تاریخچه پروژه‌ها» ببینید.
+        </Alert>
       </div>
     )
   }
@@ -123,21 +167,48 @@ export default function ProjectDetailPage() {
   const statusMeta = metaOf(projectStatusMeta, data.status)
   const paymentMeta = metaOf(paymentStatusMeta, data.payment_status)
   const deadline = deadlineInfo(data.deadline)
+  const isPaid = data.payment_status === 'paid'
 
   const canSubmitDelivery =
-    isWorker && (data.status === 'in_progress' || data.status === 'revision_requested') && !deadline.expired
-  const canPay = isEmployer && data.status === 'completed' && data.payment_status === 'unpaid'
+    isWorker &&
+    (data.status === 'in_progress' || data.status === 'revision_requested') &&
+    !deadline.expired
+
+  const canPay = isEmployer && data.status === 'completed' && !isPaid
+
+  /**
+   * قانون بک‌اند (DeliveryController::download):
+   * کارجو همیشه می‌تواند دانلود کند؛ کارفرما فقط بعد از paid شدن پروژه.
+   * بک‌اند همچنان منبع حقیقت است — این فقط بازتاب همان قانون در UI است.
+   */
+  const downloadBlocked = isEmployer && !isPaid
+  const canDownload = !downloadBlocked
+
+  /** شرط بک‌اند برای ثبت شکایت (ComplaintController::store) */
+  const canComplain =
+    (isWorker && data.status === 'revision_requested') ||
+    (isEmployer && data.status === 'submitted')
+
+  /** شرط بک‌اند برای ثبت رضایت (ReviewController::store) */
+  const canReview = (isWorker || isEmployer) && data.status === 'completed' && isPaid
 
   const descriptionValid = description.trim().length >= 10
-  const filesValid = files.length >= 1 && files.length <= 3 && files.every((f) => f.size <= 20 * 1024 * 1024)
+  const filesValid =
+    files.length >= 1 && files.length <= 3 && files.every((file) => file.size <= 20 * 1024 * 1024)
+  const complaintValid =
+    complaintTitle.trim().length >= 5 && complaintBody.trim().length >= 10
+
+  const deliveryItems = deliveries.data?.data ?? []
 
   return (
     <div className="space-y-4">
       <PageHeader
         title={task?.title ?? `پروژه ${toPersianDigits(data.id)}`}
         description={`شناسه پروژه: ${toPersianDigits(data.id)}`}
-        backTo="/projects"
-        backLabel="همه پروژه‌ها"
+        backTo={`/projects/${isPaid || data.status === 'cancelled' ? 'history' : 'active'}/${
+          isWorker ? 'worker' : 'employer'
+        }`}
+        backLabel="بازگشت به فهرست پروژه‌ها"
       />
 
       <Card>
@@ -162,12 +233,19 @@ export default function ProjectDetailPage() {
             ) : null}
           </div>
 
-          {data.payment_status === 'paid' ? (
+          {isPaid ? (
             <p className="text-[13px] text-ink-500">
               پروژه تکمیل و دستمزد پرداخت شده است؛ فایل‌های تحویل قابل دانلود هستند.
             </p>
           ) : statusMeta.hint ? (
             <p className="text-[13px] text-ink-500">{statusMeta.hint}</p>
+          ) : null}
+
+          {data.status === 'disputed' ? (
+            <Alert tone="danger" title="این پروژه در حال داوری است">
+              تا زمانی که ادمین دربارهٔ شکایت ثبت‌شده تصمیم نگیرد، ثبت تحویل یا تایید/رد تحویل ممکن
+              نیست. نتیجهٔ بررسی از طریق اعلان به شما اطلاع داده می‌شود.
+            </Alert>
           ) : null}
         </CardBody>
       </Card>
@@ -269,41 +347,83 @@ export default function ProjectDetailPage() {
         </Card>
       ) : null}
 
-      {/* تحویل‌ها */}
+      {/* تحویل‌های پروژه — GET /api/projects/{id}/deliveries */}
       <Card>
         <CardHeader
           title="تحویل‌های پروژه"
-          description="مشاهده جزئیات، پیش‌نمایش و دانلود فایل‌ها"
+          description="فهرست کامل تحویل‌ها همراه با وضعیت، دلیل رد شدن و فایل‌ها"
           action={
             canSubmitDelivery ? (
-              <Button size="sm" icon={<IconUpload className="size-4" />} onClick={() => setDeliveryOpen(true)}>
+              <Button
+                size="sm"
+                icon={<IconUpload className="size-4" />}
+                onClick={() => setDeliveryOpen(true)}
+              >
                 ثبت تحویل
               </Button>
             ) : undefined
           }
         />
         <CardBody className="space-y-4">
-          <Alert tone="warning">
-            بک‌اند endpoint ای برای <b>فهرست تحویل‌های یک پروژه</b> ندارد (فقط{' '}
-            <code className="font-mono text-[11px]">GET /api/deliveries/{'{'}id{'}'}</code>). شناسهٔ
-            تحویل را وارد کنید یا از فهرست زیر که در همین مرورگر ثبت شده استفاده کنید.
-            {/* TODO(backend): GET /api/projects/{id}/deliveries و برگرداندن delivery id در پاسخ ثبت تحویل */}
-          </Alert>
+          {deliveries.loading ? (
+            <SkeletonList count={2} />
+          ) : deliveries.error ? (
+            <ErrorState error={deliveries.error} onRetry={deliveries.reload} />
+          ) : deliveryItems.length === 0 ? (
+            <EmptyState
+              title="هنوز تحویلی ثبت نشده"
+              description={
+                isWorker
+                  ? 'وقتی کار آماده شد، فایل‌های خروجی را با دکمهٔ «ثبت تحویل» ارسال کنید.'
+                  : 'وقتی کارجو تحویل را ثبت کند، اینجا نمایش داده می‌شود.'
+              }
+              icon={<IconUpload className="size-6" />}
+            />
+          ) : (
+            <>
+              <ul className={deliveries.refreshing ? 'space-y-3 opacity-60' : 'space-y-3'}>
+                {deliveryItems.map((delivery) => (
+                  <DeliveryListRow
+                    key={delivery.id}
+                    delivery={delivery}
+                    projectId={data.id}
+                    canDownload={canDownload}
+                    downloadBlockedReason={
+                      downloadBlocked
+                        ? 'دانلود برای کارفرما فقط پس از پرداخت دستمزد پروژه فعال می‌شود.'
+                        : undefined
+                    }
+                    canReview={isEmployer}
+                  />
+                ))}
+              </ul>
 
-          <IdLookupCard
-            title="باز کردن تحویل با شناسه"
-            description="اطلاعات تحویل از API واقعی خوانده می‌شود."
-            label="شناسه تحویل"
-            placeholder="مثلاً ۱"
-            basePath="/deliveries"
-            queryString={`project=${data.id}`}
-          />
+              {deliveries.data ? (
+                <Pagination
+                  currentPage={deliveries.data.current_page}
+                  lastPage={deliveries.data.last_page}
+                  total={deliveries.data.total}
+                  disabled={deliveries.refreshing}
+                  onChange={setDeliveriesPage}
+                />
+              ) : null}
+            </>
+          )}
 
-          <RecentEntries
-            kind="delivery"
-            emptyTitle="هنوز تحویلی باز نکرده‌اید"
-            emptyDescription="پس از ثبت تحویل، شناسهٔ آن را در کادر بالا وارد کنید."
-          />
+          {isWorker && !canSubmitDelivery && data.status !== 'completed' ? (
+            <Alert tone="info">
+              {deadline.expired
+                ? 'مهلت تحویل این پروژه به پایان رسیده و بک‌اند اجازهٔ ثبت تحویل جدید نمی‌دهد.'
+                : 'در وضعیت فعلی پروژه امکان ثبت تحویل جدید وجود ندارد.'}
+            </Alert>
+          ) : null}
+
+          {downloadBlocked && deliveryItems.length > 0 ? (
+            <Alert tone="warning" title="دانلود پس از پرداخت فعال می‌شود">
+              پیش از پرداخت دستمزد، فقط پیش‌نمایش فایل‌ها در دسترس است. پس از پرداخت، دانلود هم فعال
+              می‌شود.
+            </Alert>
+          ) : null}
         </CardBody>
       </Card>
 
@@ -312,7 +432,7 @@ export default function ProjectDetailPage() {
         <Card className={canPay ? 'border-emerald-200' : undefined}>
           <CardHeader title="پرداخت دستمزد" description="پرداخت در این نسخه شبیه‌سازی‌شده است." />
           <CardBody className="space-y-3">
-            {data.payment_status === 'paid' ? (
+            {isPaid ? (
               <Alert tone="success" title="دستمزد پرداخت شده است">
                 اکنون می‌توانید فایل‌های تحویل را دانلود کنید.
               </Alert>
@@ -337,19 +457,70 @@ export default function ProjectDetailPage() {
                 >
                   پرداخت دستمزد
                 </Button>
-                {/* TODO: درگاه پرداخت واقعی وجود ندارد؛ بک‌اند فقط payment_status را paid می‌کند. */}
               </>
             )}
           </CardBody>
         </Card>
       ) : null}
 
-      {isWorker && !canSubmitDelivery && data.status !== 'completed' ? (
-        <Alert tone="info">
-          {deadline.expired
-            ? 'مهلت تحویل این پروژه به پایان رسیده و بک‌اند اجازهٔ ثبت تحویل جدید نمی‌دهد.'
-            : 'در وضعیت فعلی پروژه امکان ثبت تحویل جدید وجود ندارد.'}
-        </Alert>
+      {/* ثبت رضایت */}
+      {canReview ? (
+        <Card className="border-brand-200">
+          <CardHeader
+            title="ارزیابی همکاری"
+            description={`رضایت خود را از همکاری با ${
+              isWorker ? 'کارفرما' : 'کارجو'
+            } ثبت کنید. این کار فقط یک بار ممکن است.`}
+          />
+          <CardBody className="space-y-3">
+            {reviewSubmitted ? (
+              <Alert tone="success" title="ارزیابی شما ثبت شده است">
+                نتیجه در صفحهٔ «میزان رضایت» طرف مقابل نمایش داده می‌شود.
+                <div className="mt-3">
+                  <LinkButton to="/satisfaction" size="sm" variant="outline">
+                    میزان رضایت من
+                  </LinkButton>
+                </div>
+              </Alert>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="success"
+                  icon={<IconSmile className="size-[18px]" />}
+                  onClick={() => setReviewChoice(true)}
+                >
+                  راضی بودم
+                </Button>
+                <Button variant="danger" onClick={() => setReviewChoice(false)}>
+                  راضی نبودم
+                </Button>
+              </div>
+            )}
+          </CardBody>
+        </Card>
+      ) : null}
+
+      {/* ثبت شکایت */}
+      {canComplain ? (
+        <Card className="border-amber-200">
+          <CardHeader
+            title="ثبت شکایت"
+            description="اگر پروژه طبق توافق پیش نرفته است، بررسی ادمین را درخواست کنید."
+          />
+          <CardBody className="space-y-3">
+            <Alert tone="warning">
+              با ثبت شکایت، پروژه به وضعیت <b>در حال داوری</b> می‌رود و تا تصمیم ادمین، ثبت یا بررسی
+              تحویل متوقف می‌شود.
+            </Alert>
+            <Button
+              variant="secondary"
+              icon={<IconWarning className="size-[18px]" />}
+              onClick={() => setComplaintOpen(true)}
+            >
+              ثبت شکایت برای این پروژه
+            </Button>
+          </CardBody>
+        </Card>
       ) : null}
 
       {/* مودال ثبت تحویل */}
@@ -360,7 +531,11 @@ export default function ProjectDetailPage() {
         description="فایل‌های خروجی و توضیح کار انجام‌شده را ارسال کنید."
         footer={
           <>
-            <Button variant="secondary" onClick={() => setDeliveryOpen(false)} disabled={deliveryMutation.loading}>
+            <Button
+              variant="secondary"
+              onClick={() => setDeliveryOpen(false)}
+              disabled={deliveryMutation.loading}
+            >
               انصراف
             </Button>
             <Button
@@ -415,10 +590,82 @@ export default function ProjectDetailPage() {
         </div>
       </Modal>
 
+      {/* مودال ثبت شکایت */}
+      <Modal
+        open={complaintOpen}
+        onClose={() => setComplaintOpen(false)}
+        title="ثبت شکایت برای این پروژه"
+        description="موضوع و شرح دقیق ماجرا را بنویسید تا ادمین بتواند بررسی کند."
+        footer={
+          <>
+            <Button
+              variant="secondary"
+              onClick={() => setComplaintOpen(false)}
+              disabled={complaintMutation.loading}
+            >
+              انصراف
+            </Button>
+            <Button
+              variant="danger"
+              onClick={() => void complaintMutation.run()}
+              loading={complaintMutation.loading}
+              disabled={!complaintValid}
+            >
+              ارسال شکایت
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          {complaintMutation.error ? <ErrorState error={complaintMutation.error} compact /> : null}
+
+          <Field
+            label="موضوع"
+            required
+            hint="بین ۵ تا ۲۵۵ کاراکتر"
+            error={complaintMutation.error?.fieldError('title')}
+          >
+            <Input
+              value={complaintTitle}
+              onChange={(event) => setComplaintTitle(event.target.value)}
+              maxLength={255}
+              placeholder="مثلاً: خروجی تحویل‌شده با شرح تسک مطابقت ندارد"
+            />
+          </Field>
+
+          <Field
+            label="شرح ماجرا"
+            required
+            hint="حداقل ۱۰ کاراکتر — هرچه دقیق‌تر، بررسی سریع‌تر"
+            error={complaintMutation.error?.fieldError('description')}
+          >
+            <Textarea
+              value={complaintBody}
+              onChange={(event) => setComplaintBody(event.target.value)}
+              rows={6}
+              maxLength={5000}
+              placeholder="آنچه اتفاق افتاده را به ترتیب زمانی توضیح دهید…"
+            />
+          </Field>
+
+          <Field label="مدارک و مستندات" error={complaintMutation.error?.fieldError('files')}>
+            <FileInput
+              files={complaintFiles}
+              onChange={setComplaintFiles}
+              max={5}
+              maxSizeMb={20}
+              hint="حداکثر ۵ فایل، هرکدام تا ۲۰ مگابایت"
+            />
+          </Field>
+        </div>
+      </Modal>
+
       <ConfirmDialog
         open={paymentOpen}
         title="تایید پرداخت دستمزد"
-        description={`مبلغ ${formatToman(data.amount)} به‌عنوان دستمزد این پروژه ثبت می‌شود. این عملیات قابل بازگشت نیست.`}
+        description={`مبلغ ${formatToman(
+          data.amount,
+        )} به‌عنوان دستمزد این پروژه ثبت می‌شود. این عملیات قابل بازگشت نیست.`}
         confirmLabel="پرداخت می‌کنم"
         tone="success"
         loading={paymentMutation.loading}
@@ -427,10 +674,25 @@ export default function ProjectDetailPage() {
       >
         <Alert tone="info">
           این یک پرداخت شبیه‌سازی‌شده است؛ هیچ درگاه بانکی واقعی فراخوانی نمی‌شود و بک‌اند فقط
-          <code className="mx-1 font-mono text-[11px]">payment_status</code> را به{' '}
-          <b>paid</b> تغییر می‌دهد.
+          <code className="mx-1 font-mono text-[11px]">payment_status</code> را به <b>paid</b> تغییر
+          می‌دهد.
         </Alert>
       </ConfirmDialog>
+
+      <ConfirmDialog
+        open={reviewChoice !== null}
+        title={reviewChoice ? 'ثبت رضایت' : 'ثبت نارضایتی'}
+        description={
+          reviewChoice
+            ? 'رضایت شما از این همکاری ثبت می‌شود. این کار برای هر پروژه فقط یک بار ممکن است.'
+            : 'نارضایتی شما از این همکاری ثبت می‌شود. این کار برای هر پروژه فقط یک بار ممکن است.'
+        }
+        confirmLabel="ثبت می‌کنم"
+        tone={reviewChoice ? 'success' : 'danger'}
+        loading={reviewMutation.loading}
+        onConfirm={() => reviewChoice !== null && void reviewMutation.run(reviewChoice)}
+        onCancel={() => setReviewChoice(null)}
+      />
     </div>
   )
 }

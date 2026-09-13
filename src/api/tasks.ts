@@ -1,12 +1,24 @@
 import { apiRequest, buildFormData } from './client'
 import { endpoints } from './endpoints'
-import type { Paginated, Task, TaskListItem } from '@/types/models'
+import type { MyTaskListItem, Paginated, Task, TaskListItem } from '@/types/models'
 
 /** GET /api/tasks — عمومی، فقط تسک‌های open، صفحه‌بندی‌شده */
 export async function fetchTasks(page = 1, signal?: AbortSignal): Promise<Paginated<TaskListItem>> {
   const data = await apiRequest<{ tasks: Paginated<TaskListItem> }>(
     `${endpoints.tasks()}?page=${page}`,
     { signal, auth: false },
+  )
+  return data.tasks
+}
+
+/** GET /api/tasks/mine — تسک‌هایی که کاربر جاری ثبت کرده (همهٔ وضعیت‌ها) */
+export async function fetchMyTasks(
+  page = 1,
+  signal?: AbortSignal,
+): Promise<Paginated<MyTaskListItem>> {
+  const data = await apiRequest<{ tasks: Paginated<MyTaskListItem> }>(
+    `${endpoints.myTasks()}?page=${page}`,
+    { signal },
   )
   return data.tasks
 }
@@ -21,7 +33,7 @@ export interface CreateTaskInput {
   title: string
   description: string
   budget: number
-  /** فرمت Y-m-d H:i یا ISO — بک‌اند فقط date معتبر و after:today می‌خواهد */
+  /** فرمت Y-m-d H:i:s — بک‌اند date معتبر و after:today می‌خواهد */
   deadline: string
   category_id: number
   skills: number[]

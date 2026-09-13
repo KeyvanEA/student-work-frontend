@@ -1,5 +1,6 @@
 import type {
   ApplicationStatus,
+  ComplaintStatus,
   DeliveryStatus,
   PaymentStatus,
   ProjectStatus,
@@ -47,6 +48,13 @@ export const deliveryStatusMeta: Record<DeliveryStatus, StatusMeta> = {
   pending: { label: 'در انتظار بررسی', tone: 'warning' },
   accepted: { label: 'تایید شده', tone: 'success' },
   rejected: { label: 'رد شده', tone: 'danger' },
+}
+
+export const complaintStatusMeta: Record<ComplaintStatus, StatusMeta> = {
+  pending: { label: 'در انتظار بررسی', tone: 'warning', hint: 'هنوز توسط ادمین بررسی نشده است' },
+  reviewing: { label: 'در حال بررسی', tone: 'info', hint: 'ادمین بررسی را شروع کرده است' },
+  resolved: { label: 'پذیرفته شده', tone: 'success', hint: 'شکایت وارد تشخیص داده شد' },
+  rejected: { label: 'رد شده', tone: 'danger', hint: 'شکایت وارد تشخیص داده نشد' },
 }
 
 const FALLBACK: StatusMeta = { label: 'نامشخص', tone: 'neutral' }

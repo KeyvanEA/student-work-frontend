@@ -1,8 +1,24 @@
 import { apiRequest, buildFormData } from './client'
 import { endpoints } from './endpoints'
-import type { Delivery } from '@/types/models'
+import type { Delivery, DeliveryListItem, Paginated } from '@/types/models'
 
-/** GET /api/deliveries/{id} */
+/**
+ * GET /api/projects/{project}/deliveries — فهرست تحویل‌های یک پروژه، صفحه‌بندی‌شده.
+ * ⚠️ این پاسخ فایل‌ها را ندارد؛ برای فایل‌ها باید GET /api/deliveries/{id} گرفته شود.
+ */
+export async function fetchProjectDeliveries(
+  projectId: number | string,
+  page = 1,
+  signal?: AbortSignal,
+): Promise<Paginated<DeliveryListItem>> {
+  const data = await apiRequest<{ deliveries: Paginated<DeliveryListItem> }>(
+    `${endpoints.projectDeliveries(projectId)}?page=${page}`,
+    { signal },
+  )
+  return data.deliveries
+}
+
+/** GET /api/deliveries/{id} — شامل فایل‌ها و preview_url ساخته‌شده توسط بک‌اند */
 export async function fetchDelivery(
   deliveryId: number | string,
   signal?: AbortSignal,

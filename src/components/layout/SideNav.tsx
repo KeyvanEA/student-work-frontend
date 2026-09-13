@@ -1,19 +1,12 @@
-import { Link, useLocation } from 'react-router-dom'
-import { cn } from '@/lib/cn'
+import { Link } from 'react-router-dom'
 import { useAuth } from '@/auth/AuthContext'
 import { Avatar } from '@/components/ui/Avatar'
-import { IconBell, IconBriefcase, IconPlus, IconSettings } from '@/components/ui/Icons'
+import { IconPlus } from '@/components/ui/Icons'
+import { DashboardNav } from './DashboardNav'
 import { Logo } from './Logo'
-import { isNavActive, primaryNav } from './navItems'
 
-const SECONDARY = [
-  { to: '/my-work', label: 'کارهای من', Icon: IconBriefcase },
-  { to: '/notifications', label: 'اعلان‌ها', Icon: IconBell },
-  { to: '/settings', label: 'تنظیمات', Icon: IconSettings },
-]
-
+/** Sidebar داشبورد — فقط در دسکتاپ؛ در موبایل همین ناوبری داخل کشو نمایش داده می‌شود. */
 export function SideNav() {
-  const { pathname } = useLocation()
   const { user, isAuthenticated } = useAuth()
 
   return (
@@ -30,44 +23,9 @@ export function SideNav() {
         ثبت تسک جدید
       </Link>
 
-      <nav className="mt-6 flex-1 space-y-1" aria-label="ناوبری کناری">
-        {primaryNav.map((item) => {
-          const active = isNavActive(item, pathname)
-          return (
-            <Link
-              key={item.to}
-              to={item.to}
-              aria-current={active ? 'page' : undefined}
-              className={cn(
-                'flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13.5px] font-semibold transition-colors',
-                active ? 'bg-brand-50 text-brand-700' : 'text-ink-600 hover:bg-ink-100',
-              )}
-            >
-              <item.Icon className="size-[19px]" />
-              {item.label}
-            </Link>
-          )
-        })}
-
-        <div className="!mt-5 border-t border-ink-100 pt-3">
-          {SECONDARY.map((item) => {
-            const active = pathname.startsWith(item.to)
-            return (
-              <Link
-                key={item.to}
-                to={item.to}
-                className={cn(
-                  'flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13.5px] font-semibold transition-colors',
-                  active ? 'bg-brand-50 text-brand-700' : 'text-ink-500 hover:bg-ink-100',
-                )}
-              >
-                <item.Icon className="size-[19px]" />
-                {item.label}
-              </Link>
-            )
-          })}
-        </div>
-      </nav>
+      <div className="scrollbar-none mt-6 flex-1 overflow-y-auto">
+        <DashboardNav />
+      </div>
 
       {isAuthenticated && user ? (
         <Link
@@ -77,7 +35,9 @@ export function SideNav() {
           <Avatar name={user.full_name} size="sm" />
           <span className="min-w-0 flex-1">
             <span className="block truncate text-[13px] font-bold text-ink-800">{user.full_name}</span>
-            <span className="block truncate text-[11px] text-ink-400">{user.university_name || 'دانشجو'}</span>
+            <span className="block truncate text-[11px] text-ink-400">
+              {user.university_name || 'دانشجو'}
+            </span>
           </span>
         </Link>
       ) : (

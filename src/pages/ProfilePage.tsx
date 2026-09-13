@@ -148,13 +148,7 @@ export default function ProfilePage() {
         <CardHeader title="رزومه" />
         <CardBody>
           {user.resume_file ? (
-            <p className="text-[13px] text-ink-600">
-              فایل رزومه آپلود شده است.
-              <span className="mt-1 block text-[11.5px] text-amber-700">
-                بک‌اند لینک عمومی برای دانلود رزومه ارائه نمی‌دهد.
-                {/* TODO(backend): endpoint دانلود رزومه */}
-              </span>
-            </p>
+            <p className="text-[13px] text-ink-600">فایل رزومه آپلود شده است.</p>
           ) : (
             <p className="text-[13px] text-ink-400">هنوز رزومه‌ای آپلود نکرده‌اید.</p>
           )}
@@ -164,14 +158,17 @@ export default function ProfilePage() {
       <Card>
         <CardHeader title="میان‌برها" />
         <CardBody className="flex flex-wrap gap-2">
-          <LinkButton to="/my-work" size="sm" variant="outline">
-            تسک‌ها و درخواست‌های من
+          <LinkButton to="/my-tasks" size="sm" variant="outline">
+            تسک‌های ثبت‌شده
           </LinkButton>
-          <LinkButton to="/projects" size="sm" variant="outline">
-            پروژه‌های من
+          <LinkButton to="/projects/active/worker" size="sm" variant="outline">
+            پروژه‌های فعال
           </LinkButton>
-          <LinkButton to="/settings" size="sm" variant="ghost">
-            تنظیمات
+          <LinkButton to="/applications/sent" size="sm" variant="outline">
+            درخواست‌های همکاری
+          </LinkButton>
+          <LinkButton to="/satisfaction" size="sm" variant="ghost">
+            میزان رضایت
           </LinkButton>
         </CardBody>
       </Card>

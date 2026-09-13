@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ApiError } from '@/api/client'
 import { acceptApplication, fetchApplication, rejectApplication } from '@/api/applications'
+import { useAuth } from '@/auth/AuthContext'
 import { DetailList, DetailRow } from '@/components/domain/DetailList'
 import { SkillChips } from '@/components/domain/SkillChips'
 import { StatusBadge } from '@/components/domain/StatusBadge'
@@ -20,36 +21,31 @@ import { useDocumentTitle } from '@/hooks/useDocumentTitle'
 import { useMutation } from '@/hooks/useMutation'
 import { formatDateTime, toPersianDigits } from '@/lib/format'
 import { applicationStatusMeta, metaOf } from '@/lib/labels'
-import { rememberEntry } from '@/lib/recent'
 
 export default function ApplicationDetailPage() {
   useDocumentTitle('جزئیات درخواست همکاری')
   const { applicationId = '' } = useParams()
   const navigate = useNavigate()
   const toast = useToast()
+  const { user } = useAuth()
 
-  const loader = useCallback((signal: AbortSignal) => fetchApplication(applicationId, signal), [
-    applicationId,
-  ])
+  const loader = useCallback(
+    (signal: AbortSignal) => fetchApplication(applicationId, signal),
+    [applicationId],
+  )
   const application = useApiResource(loader, [applicationId])
 
   const [action, setAction] = useState<'accept' | 'reject' | null>(null)
-
-  useEffect(() => {
-    if (application.data) {
-      rememberEntry({
-        id: application.data.id,
-        kind: 'application',
-        title: application.data.user?.full_name ?? `درخواست #${application.data.id}`,
-        subtitle: 'درخواست همکاری',
-      })
-    }
-  }, [application.data])
 
   const acceptMutation = useMutation(() => acceptApplication(applicationId), {
     onSuccess: (result) => {
       toast.success(result.message)
       setAction(null)
+      // بک‌اند پروژهٔ تازه‌ساخته‌شده را برمی‌گرداند؛ مستقیماً واردش می‌شویم.
+      if (result.project?.id) {
+        navigate(`/projects/${result.project.id}`, { replace: true })
+        return
+      }
       application.reload()
     },
     onError: (error) => {
@@ -83,15 +79,8 @@ export default function ApplicationDetailPage() {
     const error = application.error ?? new ApiError(404, 'درخواست همکاری پیدا نشد.')
     return (
       <div>
-        <PageHeader title="جزئیات درخواست همکاری" />
+        <PageHeader title="جزئیات درخواست همکاری" backTo="/applications/sent" backLabel="درخواست‌های همکاری" />
         <ErrorState error={error} onRetry={application.reload} />
-        {error.status === 403 ? (
-          <Alert tone="warning" className="mt-4" title="چرا این خطا را می‌بینید؟">
-            بک‌اند اجازهٔ مشاهدهٔ جزئیات یک درخواست همکاری را فقط به <b>صاحب تسک</b> می‌دهد؛ کارجو
-            نمی‌تواند درخواست خودش را از این مسیر ببیند.
-            {/* TODO(backend): اجازه دادن به صاحب درخواست در ApplicationController::show */}
-          </Alert>
-        ) : null}
       </div>
     )
   }
@@ -99,12 +88,20 @@ export default function ApplicationDetailPage() {
   const data = application.data
   const meta = metaOf(applicationStatusMeta, data.status)
   const pending = data.status === 'pending'
+  const isTaskOwner = Boolean(user && data.task?.user_id === user.id)
+  const isApplicant = Boolean(user && data.user_id === user.id)
 
   return (
     <div className="space-y-4">
       <PageHeader
         title="جزئیات درخواست همکاری"
-        backTo={data.task_id ? `/tasks/${data.task_id}/applications` : '/tasks'}
+        backTo={
+          isTaskOwner && data.task_id
+            ? `/tasks/${data.task_id}/applications`
+            : isApplicant
+              ? '/applications/sent'
+              : '/applications/received'
+        }
         backLabel="بازگشت به درخواست‌ها"
       />
 
@@ -115,7 +112,7 @@ export default function ApplicationDetailPage() {
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
                 <h2 className="text-[16px] font-bold text-ink-900">
-                  {data.user?.full_name ?? `کاربر #${toPersianDigits(data.user_id)}`}
+                  {data.user?.full_name ?? `کاربر ${toPersianDigits(data.user_id)}`}
                 </h2>
                 <StatusBadge meta={meta} />
               </div>
@@ -141,7 +138,10 @@ export default function ApplicationDetailPage() {
 
       {data.files && data.files.length > 0 ? (
         <Card>
-          <CardHeader title="نمونه‌کارها و پیوست‌ها" />
+          <CardHeader
+            title="نمونه‌کارها و پیوست‌ها"
+            description="نشانی فایل‌ها را خود بک‌اند در پاسخ می‌دهد."
+          />
           <CardBody className="space-y-2">
             {data.files.map((file) => (
               <div
@@ -157,19 +157,16 @@ export default function ApplicationDetailPage() {
                 {file.download_url ? (
                   <a
                     href={file.download_url}
-                    target="_blank"
-                    rel="noreferrer"
+                    download
                     className="shrink-0 text-[12.5px] font-semibold text-brand-600 hover:underline"
                   >
-                    باز کردن
+                    دانلود
                   </a>
-                ) : null}
+                ) : (
+                  <span className="shrink-0 text-[12px] text-ink-400">نشانی فایل موجود نیست</span>
+                )}
               </div>
             ))}
-            <p className="pt-1 text-[11.5px] leading-6 text-amber-700">
-              این فایل‌ها روی دیسک خصوصی بک‌اند ذخیره شده‌اند و ممکن است لینک بالا در دسترس نباشد.
-              {/* TODO(backend): endpoint دانلود امن برای application files */}
-            </p>
           </CardBody>
         </Card>
       ) : null}
@@ -187,7 +184,7 @@ export default function ApplicationDetailPage() {
                     onClick={() => navigate(`/tasks/${data.task_id}`)}
                     className="font-semibold text-brand-600 hover:underline"
                   >
-                    مشاهده تسک {toPersianDigits(data.task_id)}
+                    {data.task?.title ?? `مشاهده تسک ${toPersianDigits(data.task_id)}`}
                   </button>
                 ) : (
                   '—'
@@ -203,7 +200,7 @@ export default function ApplicationDetailPage() {
         </CardBody>
       </Card>
 
-      {pending ? (
+      {pending && isTaskOwner ? (
         <Card className="border-brand-200">
           <CardBody className="flex flex-wrap gap-2">
             <Button variant="success" onClick={() => setAction('accept')}>
@@ -216,11 +213,16 @@ export default function ApplicationDetailPage() {
         </Card>
       ) : data.status === 'accepted' ? (
         <Alert tone="success" title="این درخواست پذیرفته شده است">
-          پروژه روی این درخواست ساخته شده. برای ورود به پروژه، شناسه آن را در صفحه «پروژه‌ها» وارد
-          کنید.
-          <div className="mt-3">
-            <LinkButton to="/projects" size="sm" variant="outline">
-              رفتن به پروژه‌ها
+          پروژهٔ مربوط به این درخواست ساخته شده است. آن را در فهرست پروژه‌های فعال خود ببینید.
+          {/* پاسخ نمایش درخواست، شناسهٔ پروژه را برنمی‌گرداند؛ بنابراین به‌جای حدس زدن،
+              کاربر را به فهرست واقعی پروژه‌ها می‌فرستیم. */}
+          <div className="mt-3 flex flex-wrap gap-2">
+            <LinkButton
+              to={isTaskOwner ? '/projects/active/employer' : '/projects/active/worker'}
+              size="sm"
+              variant="outline"
+            >
+              مشاهده پروژه
             </LinkButton>
           </div>
         </Alert>
@@ -229,7 +231,7 @@ export default function ApplicationDetailPage() {
       <ConfirmDialog
         open={action === 'accept'}
         title="پذیرش درخواست همکاری"
-        description="با پذیرش این درخواست، پروژه ساخته می‌شود و سایر درخواست‌های این تسک رد می‌شوند."
+        description="با پذیرش این درخواست، پروژه ساخته می‌شود، سایر درخواست‌های این تسک رد می‌شوند و مستقیماً وارد صفحهٔ پروژه می‌شوید."
         confirmLabel="بله، بپذیر"
         tone="success"
         loading={acceptMutation.loading}

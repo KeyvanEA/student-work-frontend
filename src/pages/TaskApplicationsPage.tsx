@@ -9,7 +9,6 @@ import { Button } from '@/components/ui/Button'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { ErrorState } from '@/components/ui/ErrorState'
-import { Modal } from '@/components/ui/Modal'
 import { Pagination } from '@/components/ui/Pagination'
 import { SkeletonList } from '@/components/ui/Skeleton'
 import { useToast } from '@/components/ui/Toast'
@@ -29,7 +28,6 @@ export default function TaskApplicationsPage() {
   const [target, setTarget] = useState<{ application: Application; action: 'accept' | 'reject' } | null>(
     null,
   )
-  const [acceptedNotice, setAcceptedNotice] = useState(false)
 
   const taskLoader = useCallback((signal: AbortSignal) => fetchTask(taskId, signal), [taskId])
   const task = useApiResource(taskLoader, [taskId])
@@ -44,7 +42,11 @@ export default function TaskApplicationsPage() {
     onSuccess: (result) => {
       toast.success(result.message)
       setTarget(null)
-      setAcceptedNotice(true)
+      // پاسخ accept شامل پروژهٔ تازه‌ساخته‌شده است؛ کاربر دیگر شناسه را دستی وارد نمی‌کند.
+      if (result.project?.id) {
+        navigate(`/projects/${result.project.id}`)
+        return
+      }
       applications.reload()
       task.reload()
     },
@@ -166,30 +168,6 @@ export default function TaskApplicationsPage() {
         onConfirm={() => target && void rejectMutation.run(target.application.id)}
         onCancel={() => setTarget(null)}
       />
-
-      {/* بعد از پذیرش، بک‌اند شناسه پروژه را برنمی‌گرداند */}
-      <Modal
-        open={acceptedNotice}
-        onClose={() => setAcceptedNotice(false)}
-        title="پروژه ساخته شد"
-        description="درخواست همکاری پذیرفته شد و پروژه روی این تسک ایجاد شد."
-        footer={
-          <>
-            <Button variant="secondary" onClick={() => setAcceptedNotice(false)}>
-              بستن
-            </Button>
-            <Button onClick={() => navigate('/projects')}>رفتن به پروژه‌ها</Button>
-          </>
-        }
-      >
-        <Alert tone="warning" title="ورود به پروژه نیاز به شناسه دارد">
-          پاسخ <code className="font-mono text-[11px]">PATCH /api/applications/{'{'}id{'}'}/accept</code>{' '}
-          فقط یک پیام برمی‌گرداند و <code className="font-mono text-[11px]">project_id</code> در آن
-          نیست؛ همچنین endpoint ای برای فهرست پروژه‌ها وجود ندارد. در صفحهٔ «پروژه‌ها» شناسه پروژه را
-          وارد کنید تا اطلاعات واقعی آن از API خوانده شود.
-          {/* TODO(backend): برگرداندن project_id در پاسخ accept و افزودن GET /api/projects */}
-        </Alert>
-      </Modal>
 
       {task.data && task.data.status !== 'open' ? (
         <Alert tone="info" className="mt-4">

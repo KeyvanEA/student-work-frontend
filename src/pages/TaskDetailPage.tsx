@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ApiError } from '@/api/client'
 import { cn } from '@/lib/cn'
@@ -27,7 +27,6 @@ import { useDocumentTitle } from '@/hooks/useDocumentTitle'
 import { useMutation } from '@/hooks/useMutation'
 import { deadlineInfo, formatDate, formatToman, toPersianDigits } from '@/lib/format'
 import { metaOf, taskStatusMeta } from '@/lib/labels'
-import { rememberEntry } from '@/lib/recent'
 
 export default function TaskDetailPage() {
   const { taskId = '' } = useParams()
@@ -45,27 +44,16 @@ export default function TaskDetailPage() {
   const [description, setDescription] = useState('')
   const [files, setFiles] = useState<File[]>([])
 
-  useEffect(() => {
-    if (task.data) {
-      rememberEntry({ id: task.data.id, kind: 'task', title: task.data.title })
-    }
-  }, [task.data])
-
   const applyMutation = useMutation(
     () => applyToTask(taskId, { description: description.trim(), files }),
     {
       onSuccess: (result) => {
         toast.success(result.message)
-        rememberEntry({
-          id: result.application.id,
-          kind: 'application',
-          title: task.data?.title ?? 'درخواست همکاری',
-          subtitle: 'درخواست من',
-        })
         setApplyOpen(false)
         setDescription('')
         setFiles([])
         task.reload()
+        navigate('/applications/sent')
       },
     },
   )
@@ -193,7 +181,10 @@ export default function TaskDetailPage() {
 
       {data.files && data.files.length > 0 ? (
         <Card>
-          <CardHeader title="فایل‌های پیوست تسک" />
+          <CardHeader
+            title="فایل‌های پیوست تسک"
+            description="نشانی کامل فایل را خود بک‌اند در پاسخ می‌دهد."
+          />
           <CardBody className="space-y-2">
             {data.files.map((file) => (
               <div
@@ -209,21 +200,16 @@ export default function TaskDetailPage() {
                 {file.download_url ? (
                   <a
                     href={file.download_url}
-                    target="_blank"
-                    rel="noreferrer"
+                    download
                     className="shrink-0 text-[12.5px] font-semibold text-brand-600 hover:underline"
                   >
-                    باز کردن
+                    دانلود
                   </a>
-                ) : null}
+                ) : (
+                  <span className="shrink-0 text-[12px] text-ink-400">نشانی فایل موجود نیست</span>
+                )}
               </div>
             ))}
-            {/* TODO(backend): با FILESYSTEM_DISK=local لینک Storage::url عمومی سرو نمی‌شود؛
-                برای دانلود واقعی فایل تسک، یک endpoint مانند deliveries.files.download لازم است. */}
-            <p className="pt-1 text-[11.5px] leading-6 text-amber-700">
-              توجه: بک‌اند این فایل‌ها را روی دیسک خصوصی ذخیره می‌کند و لینک بالا ممکن است در دسترس
-              نباشد.
-            </p>
           </CardBody>
         </Card>
       ) : null}

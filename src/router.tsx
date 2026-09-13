@@ -1,44 +1,81 @@
+import { lazy, Suspense, type ReactNode } from 'react'
 import { createBrowserRouter, Navigate, Outlet, ScrollRestoration } from 'react-router-dom'
 import { AppShell } from '@/components/layout/AppShell'
+import { PublicContentLayout, PublicLayout } from '@/components/layout/PublicLayout'
 import { ProtectedRoute } from '@/components/layout/ProtectedRoute'
 
+// ---- سایت عمومی ----
 import HomePage from '@/pages/HomePage'
 import LoginPage from '@/pages/LoginPage'
 import TasksPage from '@/pages/TasksPage'
 import TaskDetailPage from '@/pages/TaskDetailPage'
+import NotFoundPage from '@/pages/NotFoundPage'
+
+// ---- داشبورد کاربر ----
+import DashboardPage from '@/pages/DashboardPage'
 import TaskCreatePage from '@/pages/TaskCreatePage'
+import MyTasksPage from '@/pages/MyTasksPage'
 import TaskApplicationsPage from '@/pages/TaskApplicationsPage'
+import ApplicationsPage from '@/pages/ApplicationsPage'
 import ApplicationDetailPage from '@/pages/ApplicationDetailPage'
 import ProjectsPage from '@/pages/ProjectsPage'
 import ProjectDetailPage from '@/pages/ProjectDetailPage'
 import DeliveryDetailPage from '@/pages/DeliveryDetailPage'
+import ComplaintsPage from '@/pages/ComplaintsPage'
+import ComplaintDetailPage from '@/pages/ComplaintDetailPage'
+import NotificationsPage from '@/pages/NotificationsPage'
+import SatisfactionPage from '@/pages/SatisfactionPage'
 import ProfilePage from '@/pages/ProfilePage'
 import ProfileEditPage from '@/pages/ProfileEditPage'
-import MyWorkPage from '@/pages/MyWorkPage'
-import NotFoundPage from '@/pages/NotFoundPage'
 
-import MessagesPage from '@/pages/static/MessagesPage'
-import NotificationsPage from '@/pages/static/NotificationsPage'
-import SettingsPage from '@/pages/static/SettingsPage'
-import PublicProfilePage from '@/pages/static/PublicProfilePage'
-import SearchPage from '@/pages/static/SearchPage'
-import ComplaintPage from '@/pages/static/ComplaintPage'
+/**
+ * پنل ادمین (UI کامل، داده از Mock Adapter؛ بک‌اند هنوز API ادمین ندارد).
+ * به‌صورت lazy بارگذاری می‌شود تا حجم باندل سایت عمومی و داشبورد کاربر را زیاد نکند.
+ */
+import { AdminGuard } from '@/admin/components/AdminGuard'
 
-/** ریشهٔ همه مسیرها — بازگرداندن موقعیت اسکرول در هر ناوبری، از جمله صفحه ورود */
+const AdminLayout = lazy(() =>
+  import('@/admin/components/AdminLayout').then((m) => ({ default: m.AdminLayout })),
+)
+const AdminLoginPage = lazy(() => import('@/admin/pages/AdminLoginPage'))
+const AdminDashboardPage = lazy(() => import('@/admin/pages/AdminDashboardPage'))
+const AdminUsersPage = lazy(() => import('@/admin/pages/AdminUsersPage'))
+const AdminUserDetailPage = lazy(() => import('@/admin/pages/AdminUserDetailPage'))
+const AdminTasksPage = lazy(() => import('@/admin/pages/AdminTasksPage'))
+const AdminTaskDetailPage = lazy(() => import('@/admin/pages/AdminTaskDetailPage'))
+const AdminApplicationsPage = lazy(() => import('@/admin/pages/AdminApplicationsPage'))
+const AdminApplicationDetailPage = lazy(() => import('@/admin/pages/AdminApplicationDetailPage'))
+const AdminProjectsPage = lazy(() => import('@/admin/pages/AdminProjectsPage'))
+const AdminProjectDetailPage = lazy(() => import('@/admin/pages/AdminProjectDetailPage'))
+const AdminProjectDeliveriesPage = lazy(() => import('@/admin/pages/AdminProjectDeliveriesPage'))
+const AdminComplaintsPage = lazy(() => import('@/admin/pages/AdminComplaintsPage'))
+const AdminComplaintDetailPage = lazy(() => import('@/admin/pages/AdminComplaintDetailPage'))
+const AdminReviewsPage = lazy(() => import('@/admin/pages/AdminReviewsPage'))
+const AdminCategoriesPage = lazy(() => import('@/admin/pages/AdminCategoriesPage'))
+const AdminSkillsPage = lazy(() => import('@/admin/pages/AdminSkillsPage'))
+
+/** جلوگیری از پرش صفحه هنگام بارگذاری chunk پنل ادمین */
+function AdminChunk({ children }: { children: ReactNode }) {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-[40dvh] items-center justify-center text-[13px] text-ink-400">
+          در حال بارگذاری…
+        </div>
+      }
+    >
+      {children}
+    </Suspense>
+  )
+}
+
+/** ریشهٔ همه مسیرها — بازگرداندن موقعیت اسکرول در هر ناوبری */
 function RootLayout() {
   return (
     <>
       <ScrollRestoration />
       <Outlet />
     </>
-  )
-}
-
-function ShellLayout() {
-  return (
-    <AppShell>
-      <Outlet />
-    </AppShell>
   )
 }
 
@@ -56,38 +93,170 @@ export const router = createBrowserRouter([
     children: [
       { path: '/login', element: <LoginPage /> },
       {
-        element: <ShellLayout />,
+        path: '/admin/login',
+        element: (
+          <AdminChunk>
+            <AdminLoginPage />
+          </AdminChunk>
+        ),
+      },
+
+      // ---------- سایت عمومی: صفحه اصلی تمام‌عرض ----------
+      {
+        element: <PublicLayout />,
+        children: [{ index: true, element: <HomePage /> }],
+      },
+
+      // ---------- سایت عمومی: صفحات تسک ----------
+      {
+        element: <PublicContentLayout />,
         children: [
-          // ---- عمومی ----
-          { index: true, element: <HomePage /> },
           { path: 'tasks', element: <TasksPage /> },
           { path: 'tasks/:taskId', element: <TaskDetailPage /> },
-          { path: 'users/:userId', element: <PublicProfilePage /> },
-          { path: 'search', element: <SearchPage /> },
+        ],
+      },
 
-          // ---- نیازمند ورود ----
+      // ---------- داشبورد کاربر (نیازمند ورود) ----------
+      {
+        element: <Guarded />,
+        children: [
           {
-            element: <Guarded />,
+            element: <AppShell />,
             children: [
-              { path: 'tasks/new', element: <TaskCreatePage /> },
-              { path: 'tasks/:taskId/applications', element: <TaskApplicationsPage /> },
-              { path: 'applications/:applicationId', element: <ApplicationDetailPage /> },
-              { path: 'projects', element: <ProjectsPage /> },
-              { path: 'projects/:projectId', element: <ProjectDetailPage /> },
-              { path: 'deliveries/:deliveryId', element: <DeliveryDetailPage /> },
+              { path: 'dashboard', element: <DashboardPage /> },
+
               { path: 'profile', element: <ProfilePage /> },
               { path: 'profile/edit', element: <ProfileEditPage /> },
-              { path: 'my-work', element: <MyWorkPage /> },
-              { path: 'messages', element: <MessagesPage /> },
               { path: 'notifications', element: <NotificationsPage /> },
-              { path: 'settings', element: <SettingsPage /> },
-              { path: 'complaints', element: <ComplaintPage /> },
+              { path: 'satisfaction', element: <SatisfactionPage /> },
+
+              { path: 'tasks/new', element: <TaskCreatePage /> },
+              { path: 'my-tasks', element: <MyTasksPage /> },
+              { path: 'tasks/:taskId/applications', element: <TaskApplicationsPage /> },
+
+              // مسیرهای ثابت پیش از مسیر پویا تعریف شده‌اند تا تداخل نداشته باشند
+              { path: 'applications', element: <Navigate to="/applications/sent" replace /> },
+              { path: 'applications/sent', element: <ApplicationsPage type="sent" /> },
+              { path: 'applications/received', element: <ApplicationsPage type="received" /> },
+              { path: 'applications/:applicationId', element: <ApplicationDetailPage /> },
+
+              { path: 'projects', element: <Navigate to="/projects/active/worker" replace /> },
+              { path: 'projects/:status/:role', element: <ProjectsPage /> },
+              { path: 'projects/:projectId', element: <ProjectDetailPage /> },
+
+              { path: 'deliveries/:deliveryId', element: <DeliveryDetailPage /> },
+
+              { path: 'complaints', element: <Navigate to="/complaints/mine" replace /> },
+              { path: 'complaints/mine', element: <ComplaintsPage scope="mine" /> },
+              { path: 'complaints/related', element: <ComplaintsPage scope="related" /> },
+              { path: 'complaints/:complaintId', element: <ComplaintDetailPage /> },
             ],
           },
-
-          { path: 'home', element: <Navigate to="/" replace /> },
-          { path: '*', element: <NotFoundPage /> },
         ],
+      },
+
+      // ---------- پنل ادمین ----------
+      {
+        path: 'admin',
+        element: (
+          <AdminGuard>
+            <AdminChunk>
+              <AdminLayout />
+            </AdminChunk>
+          </AdminGuard>
+        ),
+        children: [
+          { index: true, element: (
+            <AdminChunk>
+              <AdminDashboardPage />
+            </AdminChunk>
+          ) },
+
+          { path: 'users', element: (
+            <AdminChunk>
+              <AdminUsersPage />
+            </AdminChunk>
+          ) },
+          { path: 'users/:userId', element: (
+            <AdminChunk>
+              <AdminUserDetailPage />
+            </AdminChunk>
+          ) },
+
+          { path: 'tasks', element: (
+            <AdminChunk>
+              <AdminTasksPage />
+            </AdminChunk>
+          ) },
+          { path: 'tasks/:taskId', element: (
+            <AdminChunk>
+              <AdminTaskDetailPage />
+            </AdminChunk>
+          ) },
+
+          { path: 'applications', element: (
+            <AdminChunk>
+              <AdminApplicationsPage />
+            </AdminChunk>
+          ) },
+          { path: 'applications/:applicationId', element: (
+            <AdminChunk>
+              <AdminApplicationDetailPage />
+            </AdminChunk>
+          ) },
+
+          { path: 'projects', element: (
+            <AdminChunk>
+              <AdminProjectsPage />
+            </AdminChunk>
+          ) },
+          { path: 'projects/:projectId', element: (
+            <AdminChunk>
+              <AdminProjectDetailPage />
+            </AdminChunk>
+          ) },
+          { path: 'projects/:projectId/deliveries', element: (
+            <AdminChunk>
+              <AdminProjectDeliveriesPage />
+            </AdminChunk>
+          ) },
+
+          { path: 'complaints', element: (
+            <AdminChunk>
+              <AdminComplaintsPage />
+            </AdminChunk>
+          ) },
+          { path: 'complaints/:complaintId', element: (
+            <AdminChunk>
+              <AdminComplaintDetailPage />
+            </AdminChunk>
+          ) },
+
+          { path: 'reviews', element: (
+            <AdminChunk>
+              <AdminReviewsPage />
+            </AdminChunk>
+          ) },
+          { path: 'categories', element: (
+            <AdminChunk>
+              <AdminCategoriesPage />
+            </AdminChunk>
+          ) },
+          { path: 'skills', element: (
+            <AdminChunk>
+              <AdminSkillsPage />
+            </AdminChunk>
+          ) },
+        ],
+      },
+
+      // ---------- بازماندهٔ مسیرهای قدیمی ----------
+      { path: 'home', element: <Navigate to="/" replace /> },
+      { path: 'my-work', element: <Navigate to="/my-tasks" replace /> },
+
+      {
+        element: <PublicContentLayout />,
+        children: [{ path: '*', element: <NotFoundPage /> }],
       },
     ],
   },
