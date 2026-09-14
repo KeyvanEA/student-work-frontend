@@ -29,7 +29,7 @@ import ProfilePage from '@/pages/ProfilePage'
 import ProfileEditPage from '@/pages/ProfileEditPage'
 
 /**
- * پنل ادمین (UI کامل، داده از Mock Adapter؛ بک‌اند هنوز API ادمین ندارد).
+ * پنل ادمین — ورود جداگانه ندارد و از همان Authentication پروژه استفاده می‌کند.
  * به‌صورت lazy بارگذاری می‌شود تا حجم باندل سایت عمومی و داشبورد کاربر را زیاد نکند.
  */
 import { AdminGuard } from '@/admin/components/AdminGuard'
@@ -37,22 +37,9 @@ import { AdminGuard } from '@/admin/components/AdminGuard'
 const AdminLayout = lazy(() =>
   import('@/admin/components/AdminLayout').then((m) => ({ default: m.AdminLayout })),
 )
-const AdminLoginPage = lazy(() => import('@/admin/pages/AdminLoginPage'))
 const AdminDashboardPage = lazy(() => import('@/admin/pages/AdminDashboardPage'))
-const AdminUsersPage = lazy(() => import('@/admin/pages/AdminUsersPage'))
-const AdminUserDetailPage = lazy(() => import('@/admin/pages/AdminUserDetailPage'))
-const AdminTasksPage = lazy(() => import('@/admin/pages/AdminTasksPage'))
-const AdminTaskDetailPage = lazy(() => import('@/admin/pages/AdminTaskDetailPage'))
-const AdminApplicationsPage = lazy(() => import('@/admin/pages/AdminApplicationsPage'))
-const AdminApplicationDetailPage = lazy(() => import('@/admin/pages/AdminApplicationDetailPage'))
-const AdminProjectsPage = lazy(() => import('@/admin/pages/AdminProjectsPage'))
-const AdminProjectDetailPage = lazy(() => import('@/admin/pages/AdminProjectDetailPage'))
-const AdminProjectDeliveriesPage = lazy(() => import('@/admin/pages/AdminProjectDeliveriesPage'))
 const AdminComplaintsPage = lazy(() => import('@/admin/pages/AdminComplaintsPage'))
 const AdminComplaintDetailPage = lazy(() => import('@/admin/pages/AdminComplaintDetailPage'))
-const AdminReviewsPage = lazy(() => import('@/admin/pages/AdminReviewsPage'))
-const AdminCategoriesPage = lazy(() => import('@/admin/pages/AdminCategoriesPage'))
-const AdminSkillsPage = lazy(() => import('@/admin/pages/AdminSkillsPage'))
 
 /** جلوگیری از پرش صفحه هنگام بارگذاری chunk پنل ادمین */
 function AdminChunk({ children }: { children: ReactNode }) {
@@ -92,15 +79,6 @@ export const router = createBrowserRouter([
     element: <RootLayout />,
     children: [
       { path: '/login', element: <LoginPage /> },
-      {
-        path: '/admin/login',
-        element: (
-          <AdminChunk>
-            <AdminLoginPage />
-          </AdminChunk>
-        ),
-      },
-
       // ---------- سایت عمومی: صفحه اصلی تمام‌عرض ----------
       {
         element: <PublicLayout />,
@@ -155,7 +133,7 @@ export const router = createBrowserRouter([
         ],
       },
 
-      // ---------- پنل ادمین ----------
+      // ---------- پنل ادمین (فقط داشبورد و شکایات فعال‌اند) ----------
       {
         path: 'admin',
         element: (
@@ -166,87 +144,32 @@ export const router = createBrowserRouter([
           </AdminGuard>
         ),
         children: [
-          { index: true, element: (
-            <AdminChunk>
-              <AdminDashboardPage />
-            </AdminChunk>
-          ) },
-
-          { path: 'users', element: (
-            <AdminChunk>
-              <AdminUsersPage />
-            </AdminChunk>
-          ) },
-          { path: 'users/:userId', element: (
-            <AdminChunk>
-              <AdminUserDetailPage />
-            </AdminChunk>
-          ) },
-
-          { path: 'tasks', element: (
-            <AdminChunk>
-              <AdminTasksPage />
-            </AdminChunk>
-          ) },
-          { path: 'tasks/:taskId', element: (
-            <AdminChunk>
-              <AdminTaskDetailPage />
-            </AdminChunk>
-          ) },
-
-          { path: 'applications', element: (
-            <AdminChunk>
-              <AdminApplicationsPage />
-            </AdminChunk>
-          ) },
-          { path: 'applications/:applicationId', element: (
-            <AdminChunk>
-              <AdminApplicationDetailPage />
-            </AdminChunk>
-          ) },
-
-          { path: 'projects', element: (
-            <AdminChunk>
-              <AdminProjectsPage />
-            </AdminChunk>
-          ) },
-          { path: 'projects/:projectId', element: (
-            <AdminChunk>
-              <AdminProjectDetailPage />
-            </AdminChunk>
-          ) },
-          { path: 'projects/:projectId/deliveries', element: (
-            <AdminChunk>
-              <AdminProjectDeliveriesPage />
-            </AdminChunk>
-          ) },
-
-          { path: 'complaints', element: (
-            <AdminChunk>
-              <AdminComplaintsPage />
-            </AdminChunk>
-          ) },
-          { path: 'complaints/:complaintId', element: (
-            <AdminChunk>
-              <AdminComplaintDetailPage />
-            </AdminChunk>
-          ) },
-
-          { path: 'reviews', element: (
-            <AdminChunk>
-              <AdminReviewsPage />
-            </AdminChunk>
-          ) },
-          { path: 'categories', element: (
-            <AdminChunk>
-              <AdminCategoriesPage />
-            </AdminChunk>
-          ) },
-          { path: 'skills', element: (
-            <AdminChunk>
-              <AdminSkillsPage />
-            </AdminChunk>
-          ) },
+          {
+            index: true,
+            element: (
+              <AdminChunk>
+                <AdminDashboardPage />
+              </AdminChunk>
+            ),
+          },
+          {
+            path: 'complaints',
+            element: (
+              <AdminChunk>
+                <AdminComplaintsPage />
+              </AdminChunk>
+            ),
+          },
+          {
+            path: 'complaints/:complaintId',
+            element: (
+              <AdminChunk>
+                <AdminComplaintDetailPage />
+              </AdminChunk>
+            ),
+          },
+          // هر مسیر دیگری زیر /admin هنوز ساخته نشده است
+          { path: '*', element: <Navigate to="/admin" replace /> },
         ],
       },
 

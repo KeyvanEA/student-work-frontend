@@ -1,13 +1,16 @@
 import { Link } from 'react-router-dom'
+import { useAdminAccess } from '@/admin/AdminAccessContext'
 import { useAuth } from '@/auth/AuthContext'
 import { Avatar } from '@/components/ui/Avatar'
-import { IconPlus } from '@/components/ui/Icons'
+import { IconPlus, IconShield } from '@/components/ui/Icons'
 import { DashboardNav } from './DashboardNav'
 import { Logo } from './Logo'
 
 /** Sidebar داشبورد — فقط در دسکتاپ؛ در موبایل همین ناوبری داخل کشو نمایش داده می‌شود. */
 export function SideNav() {
   const { user, isAuthenticated } = useAuth()
+  // فقط وقتی نقش ادمین قبلاً مشخص شده باشد؛ هیچ بررسی اضافه‌ای اینجا انجام نمی‌شود.
+  const { isAdmin } = useAdminAccess()
 
   return (
     <aside className="sticky top-0 hidden h-dvh w-64 shrink-0 flex-col border-e border-ink-200 bg-white px-4 py-5 lg:flex">
@@ -26,6 +29,16 @@ export function SideNav() {
       <div className="scrollbar-none mt-6 flex-1 overflow-y-auto">
         <DashboardNav />
       </div>
+
+      {isAdmin ? (
+        <Link
+          to="/admin"
+          className="mt-3 flex h-11 items-center justify-center gap-2 rounded-xl bg-ink-900 text-[13px] font-semibold text-white transition-colors hover:bg-ink-800"
+        >
+          <IconShield className="size-[18px]" />
+          پنل ادمین
+        </Link>
+      ) : null}
 
       {isAuthenticated && user ? (
         <Link

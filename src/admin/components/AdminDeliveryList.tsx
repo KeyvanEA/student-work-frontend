@@ -1,15 +1,25 @@
 import { StatusBadge } from '@/components/domain/StatusBadge'
 import { EmptyState } from '@/components/ui/EmptyState'
-import { IconFile } from '@/components/ui/Icons'
+import { IconFile, IconUpload } from '@/components/ui/Icons'
 import { formatBytes, formatDateTime, toPersianDigits } from '@/lib/format'
 import { deliveryStatusMeta, metaOf } from '@/lib/labels'
-import type { AdminDeliveryRow } from '../api/types'
+import type { AdminDelivery } from '../api/types'
 
-/** تاریخچهٔ تحویل‌های یک پروژه — در صفحهٔ پروژه و در پروندهٔ شکایت استفاده می‌شود */
-export function AdminDeliveryList({ deliveries }: { deliveries: AdminDeliveryRow[] }) {
+/**
+ * تاریخچهٔ تحویل‌های پروژه در پروندهٔ شکایت.
+ *
+ * ⚠️ بک‌اند در مسیرهای ادمین برای فایل‌های تحویل هیچ URL دانلود/پیش‌نمایشی نمی‌دهد
+ * (فقط مدل خام فایل)، بنابراین اینجا فقط مشخصات فایل نمایش داده می‌شود و لینکی
+ * ساخته نمی‌شود.
+ */
+export function AdminDeliveryList({ deliveries }: { deliveries: AdminDelivery[] }) {
   if (deliveries.length === 0) {
     return (
-      <EmptyState title="تحویلی ثبت نشده" description="برای این پروژه هیچ تحویلی ارسال نشده است." />
+      <EmptyState
+        title="تحویلی ثبت نشده"
+        description="برای این پروژه هیچ تحویلی ارسال نشده است."
+        icon={<IconUpload className="size-6" />}
+      />
     )
   }
 
@@ -46,7 +56,7 @@ export function AdminDeliveryList({ deliveries }: { deliveries: AdminDeliveryRow
             </div>
           ) : null}
 
-          {delivery.files.length > 0 ? (
+          {delivery.files && delivery.files.length > 0 ? (
             <ul className="mt-3 space-y-1.5 border-t border-ink-100 pt-3">
               {delivery.files.map((file) => (
                 <li key={file.id} className="flex items-center gap-2.5 text-[12.5px] text-ink-600">

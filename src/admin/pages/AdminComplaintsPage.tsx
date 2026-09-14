@@ -1,54 +1,96 @@
 import { useCallback, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { fetchAdminComplaints } from '@/admin/api/adminApi'
+import { SegmentedTabs } from '@/components/domain/SegmentedTabs'
 import { StatusBadge } from '@/components/domain/StatusBadge'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { ErrorState } from '@/components/ui/ErrorState'
-import { Field } from '@/components/ui/Field'
-import { Input } from '@/components/ui/Input'
+import { IconWarning } from '@/components/ui/Icons'
 import { Pagination } from '@/components/ui/Pagination'
-import { Select } from '@/components/ui/Select'
 import { SkeletonList } from '@/components/ui/Skeleton'
 import { useApiResource } from '@/hooks/useApiResource'
 import { useDocumentTitle } from '@/hooks/useDocumentTitle'
-import { formatDate, toPersianDigits } from '@/lib/format'
+import { formatDate, formatToman, toPersianDigits } from '@/lib/format'
 import { complaintStatusMeta, metaOf } from '@/lib/labels'
-import { adminApi } from '../api/adminApi'
-import { plannedAdminEndpoints } from '../api/plannedEndpoints'
-import { AdminFilters, AdminTable, type AdminColumn } from '../components/AdminTable'
-import { MockNotice } from '../components/MockNotice'
-import type { AdminComplaintRow } from '../api/types'
+import { AdminTable, type AdminColumn } from '../components/AdminTable'
+import type { AdminComplaintListItem } from '../api/types'
+import type { ComplaintStatus } from '@/types/models'
 
-const COMPLAINT_STATUSES = ['pending', 'reviewing', 'resolved', 'rejected'] as const
+type Filter = ComplaintStatus | 'all'
 
+const FILTERS: Filter[] = ['all', 'pending', 'reviewing', 'resolved', 'rejected']
+
+const FILTER_LABEL: Record<Filter, string> = {
+  all: 'همه',
+  pending: 'در انتظار بررسی',
+  reviewing: 'در حال بررسی',
+  resolved: 'حل‌شده',
+  rejected: 'ردشده',
+}
+
+function isFilter(value: string | null): value is Filter {
+  return value !== null && (FILTERS as string[]).includes(value)
+}
+
+/** فهرست شکایات — GET /api/admin/complaints[?status=…] */
 export default function AdminComplaintsPage() {
-  useDocumentTitle('شکایات — ادمین')
+  useDocumentTitle('مدیریت شکایات — ادمین')
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
 
-  const [page, setPage] = useState(1)
-  const [search, setSearch] = useState('')
-  const [status, setStatus] = useState('all')
-  const [from, setFrom] = useState('')
-  const [to, setTo] = useState('')
+  const statusParam = searchParams.get('status')
+  const status: Filter = isFilter(statusParam) ? statusParam : 'all'
+
+  /**
+   * شمارهٔ صفحه به فیلتر جاری گره خورده است تا با عوض شدن فیلتر خود‌به‌خود به صفحهٔ ۱
+   * برگردد — بدون effect اضافه و بدون درخواست دوباره.
+   */
+  const [pageState, setPageState] = useState<{ status: Filter; page: number }>({
+    status,
+    page: 1,
+  })
+  const page = pageState.status === status ? pageState.page : 1
 
   const loader = useCallback(
-    () => adminApi.complaints({ page, search, status, from: from || undefined, to: to || undefined }),
-    [page, search, status, from, to],
+    (signal: AbortSignal) => fetchAdminComplaints({ status, page }, signal),
+    [status, page],
   )
-  const complaints = useApiResource(loader, [page, search, status, from, to])
+  const complaints = useApiResource(loader, [status, page])
 
-  const columns: Array<AdminColumn<AdminComplaintRow>> = [
-    { key: 'id', header: 'شناسه', render: (row) => toPersianDigits(row.id), hideOnMobile: true },
+  const items = complaints.data?.data ?? []
+
+  const columns: Array<AdminColumn<AdminComplaintListItem>> = [
+    {
+      key: 'id',
+      header: 'شناسه',
+      render: (row) => toPersianDigits(row.id),
+      hideOnMobile: true,
+    },
     {
       key: 'title',
-      header: 'موضوع',
+      header: 'موضوع شکایت',
       render: (row) => <span className="font-semibold text-ink-800">{row.title}</span>,
     },
-    { key: 'complainant', header: 'شاکی', render: (row) => row.complainant.full_name },
     {
-      key: 'project',
-      header: 'پروژه',
-      render: (row) => `پروژه ${toPersianDigits(row.project_id)}`,
+      key: 'complainant',
+      header: 'شاکی',
+      render: (row) => row.user?.full_name ?? `کاربر ${toPersianDigits(row.user_id)}`,
+    },
+    {
+      key: 'task',
+      header: 'تسک پروژه',
+      render: (row) =>
+        row.project?.application?.task?.title ?? `پروژه ${toPersianDigits(row.project_id)}`,
+    },
+    {
+      key: 'amount',
+      header: 'مبلغ پروژه',
+      render: (row) => (
+        <span className="text-emerald-700">
+          {row.project ? formatToman(row.project.amount) : '—'}
+        </span>
+      ),
     },
     {
       key: 'status',
@@ -66,69 +108,18 @@ export default function AdminComplaintsPage() {
   return (
     <div className="space-y-4">
       <PageHeader
-        title="شکایات"
+        title="مدیریت شکایات"
         description="بررسی و داوری شکایت‌های ثبت‌شده روی پروژه‌ها"
       />
 
-      <MockNotice
-        endpoints={[
-          `GET ${plannedAdminEndpoints.complaints()}`,
-          `GET ${plannedAdminEndpoints.complaint('{complaint}')}`,
-          `PATCH ${plannedAdminEndpoints.complaintReview('{complaint}')}`,
-          `PATCH ${plannedAdminEndpoints.complaintDecision('{complaint}')}`,
-        ]}
+      <SegmentedTabs
+        ariaLabel="فیلتر وضعیت شکایت"
+        items={FILTERS.map((item) => ({
+          to: item === 'all' ? '/admin/complaints' : `/admin/complaints?status=${item}`,
+          label: FILTER_LABEL[item],
+          active: item === status,
+        }))}
       />
-
-      <AdminFilters>
-        <Field label="جستجو">
-          <Input
-            value={search}
-            placeholder="موضوع، شاکی یا شناسه پروژه…"
-            onChange={(event) => {
-              setSearch(event.target.value)
-              setPage(1)
-            }}
-          />
-        </Field>
-        <Field label="وضعیت">
-          <Select
-            value={status}
-            onChange={(event) => {
-              setStatus(event.target.value)
-              setPage(1)
-            }}
-          >
-            <option value="all">همه</option>
-            {COMPLAINT_STATUSES.map((item) => (
-              <option key={item} value={item}>
-                {metaOf(complaintStatusMeta, item).label}
-              </option>
-            ))}
-          </Select>
-        </Field>
-        <Field label="از تاریخ">
-          <Input
-            type="date"
-            dir="ltr"
-            value={from}
-            onChange={(event) => {
-              setFrom(event.target.value)
-              setPage(1)
-            }}
-          />
-        </Field>
-        <Field label="تا تاریخ">
-          <Input
-            type="date"
-            dir="ltr"
-            value={to}
-            onChange={(event) => {
-              setTo(event.target.value)
-              setPage(1)
-            }}
-          />
-        </Field>
-      </AdminFilters>
 
       {complaints.loading ? (
         <SkeletonList count={4} />
@@ -136,12 +127,26 @@ export default function AdminComplaintsPage() {
         <ErrorState error={complaints.error} onRetry={complaints.reload} />
       ) : (
         <>
+          {items.length > 0 ? (
+            <p className="text-[12.5px] text-ink-500">
+              {toPersianDigits(complaints.data?.total ?? items.length)} شکایت
+            </p>
+          ) : null}
+
           <AdminTable
             columns={columns}
-            rows={complaints.data?.data ?? []}
+            rows={items}
             rowKey={(row) => row.id}
             onRowClick={(row) => navigate(`/admin/complaints/${row.id}`)}
-            emptyState={<EmptyState title="شکایتی پیدا نشد" description="فیلترها را تغییر دهید." />}
+            emptyState={
+              <EmptyState
+                title={
+                  status === 'all' ? 'شکایتی ثبت نشده است' : `شکایتی با وضعیت «${FILTER_LABEL[status]}» نیست`
+                }
+                description="با تغییر فیلتر وضعیت، شکایت‌های دیگر را ببینید."
+                icon={<IconWarning className="size-6" />}
+              />
+            }
           />
 
           {complaints.data ? (
@@ -150,7 +155,10 @@ export default function AdminComplaintsPage() {
               lastPage={complaints.data.last_page}
               total={complaints.data.total}
               disabled={complaints.refreshing}
-              onChange={setPage}
+              onChange={(next) => {
+                setPageState({ status, page: next })
+                window.scrollTo({ top: 0, behavior: 'smooth' })
+              }}
             />
           ) : null}
         </>

@@ -52,6 +52,13 @@ export interface User {
   created_at?: string
   updated_at?: string
   skills?: Skill[]
+  /**
+   * نقش‌های spatie/laravel-permission.
+   * ⚠️ بک‌اند فعلی این رابطه را در /api/login، /api/user و /api/profile eager-load نمی‌کند،
+   * بنابراین معمولاً وجود ندارد. اگر روزی `$user->load('roles')` اضافه شود، همین‌جا خوانده
+   * می‌شود و دیگر نیازی به بررسی دسترسی از راه دیگر نیست.
+   */
+  roles?: Array<{ id: number; name: string }>
 }
 
 export interface TaskFile {

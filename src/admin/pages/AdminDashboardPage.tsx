@@ -1,234 +1,127 @@
 import { useCallback } from 'react'
-import { Link } from 'react-router-dom'
+import { fetchAdminDashboard } from '@/admin/api/adminApi'
 import { StatCard } from '@/components/domain/StatCard'
-import { StatusBadge } from '@/components/domain/StatusBadge'
 import { PageHeader } from '@/components/layout/PageHeader'
+import { Alert } from '@/components/ui/Alert'
+import { LinkButton } from '@/components/ui/Button'
 import { Card, CardBody, CardHeader } from '@/components/ui/Card'
 import { ErrorState } from '@/components/ui/ErrorState'
-import {
-  IconPackage,
-  IconTasks,
-  IconUsers,
-  IconWallet,
-  IconWarning,
-} from '@/components/ui/Icons'
+import { IconWarning } from '@/components/ui/Icons'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { useApiResource } from '@/hooks/useApiResource'
 import { useDocumentTitle } from '@/hooks/useDocumentTitle'
-import { formatDate, formatToman, toPersianDigits } from '@/lib/format'
-import {
-  complaintStatusMeta,
-  metaOf,
-  projectStatusMeta,
-  taskStatusMeta,
-} from '@/lib/labels'
-import { adminApi } from '../api/adminApi'
-import { plannedAdminEndpoints } from '../api/plannedEndpoints'
-import { MockNotice } from '../components/MockNotice'
+import { formatNumber } from '@/lib/format'
 
+/** داشبورد ادمین — آمار شکایات مستقیماً از GET /api/admin/dashboard */
 export default function AdminDashboardPage() {
   useDocumentTitle('داشبورد ادمین')
 
-  const loader = useCallback(() => adminApi.overview(), [])
-  const overview = useApiResource(loader, [])
+  const loader = useCallback((signal: AbortSignal) => fetchAdminDashboard(signal), [])
+  const dashboard = useApiResource(loader, [])
+
+  const stats = dashboard.data?.complaints
+  const total = stats
+    ? stats.pending + stats.reviewing + stats.resolved + stats.rejected
+    : 0
+  const open = stats ? stats.pending + stats.reviewing : 0
 
   return (
     <div className="space-y-5">
-      <PageHeader title="داشبورد ادمین" description="نمای کلی وضعیت سامانه" />
+      <PageHeader
+        title="داشبورد ادمین"
+        description="وضعیت شکایات ثبت‌شده در سامانه"
+        action={
+          <LinkButton to="/admin/complaints" size="sm" variant="outline">
+            مدیریت شکایات
+          </LinkButton>
+        }
+      />
 
-      <MockNotice endpoints={[`GET ${plannedAdminEndpoints.stats()}`]} />
-
-      {overview.loading ? (
+      {dashboard.loading ? (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {Array.from({ length: 8 }).map((_, index) => (
+          {Array.from({ length: 4 }).map((_, index) => (
             <Skeleton key={index} className="h-28 rounded-2xl" />
           ))}
         </div>
-      ) : overview.error ? (
-        <ErrorState error={overview.error} onRetry={overview.reload} />
-      ) : overview.data ? (
+      ) : dashboard.error ? (
+        <ErrorState error={dashboard.error} onRetry={dashboard.reload} />
+      ) : stats ? (
         <>
           <section>
-            <h2 className="mb-3 text-[15px] font-bold text-ink-900">کاربران و تسک‌ها</h2>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <StatCard
-                label="کل کاربران"
-                value={overview.data.stats.total_users}
-                to="/admin/users"
-                tone="brand"
-                Icon={IconUsers}
-              />
-              <StatCard
-                label="کاربران فعال"
-                value={overview.data.stats.active_users}
-                to="/admin/users"
-                tone="success"
-                Icon={IconUsers}
-              />
-              <StatCard
-                label="کاربران غیرفعال"
-                value={overview.data.stats.inactive_users}
-                to="/admin/users"
-                tone="neutral"
-                Icon={IconUsers}
-              />
-              <StatCard
-                label="تسک‌های باز"
-                value={overview.data.stats.open_tasks}
-                to="/admin/tasks"
-                tone="info"
-                Icon={IconTasks}
-              />
-            </div>
-          </section>
-
-          <section>
-            <h2 className="mb-3 text-[15px] font-bold text-ink-900">پروژه‌ها</h2>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <StatCard
-                label="پروژه‌های فعال"
-                value={overview.data.stats.active_projects}
-                to="/admin/projects"
-                tone="brand"
-                Icon={IconPackage}
-              />
-              <StatCard
-                label="پروژه‌های تکمیل‌شده"
-                value={overview.data.stats.completed_projects}
-                to="/admin/projects"
-                tone="success"
-                Icon={IconPackage}
-              />
-              <StatCard
-                label="پروژه‌های در داوری"
-                value={overview.data.stats.disputed_projects}
-                to="/admin/projects"
-                tone="danger"
-                Icon={IconWarning}
-              />
-              <StatCard
-                label="پروژه‌های پرداخت‌شده"
-                value={overview.data.stats.paid_projects}
-                to="/admin/projects"
-                tone="success"
-                Icon={IconWallet}
-              />
-            </div>
-          </section>
-
-          <section>
-            <h2 className="mb-3 text-[15px] font-bold text-ink-900">شکایات</h2>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <StatCard
-                label="در انتظار بررسی"
-                value={overview.data.stats.pending_complaints}
-                to="/admin/complaints"
+                label="شکایات در انتظار بررسی"
+                value={stats.pending}
+                hint="هنوز بررسی آن‌ها شروع نشده"
+                to="/admin/complaints?status=pending"
                 tone="warning"
                 Icon={IconWarning}
               />
               <StatCard
-                label="در حال بررسی"
-                value={overview.data.stats.reviewing_complaints}
-                to="/admin/complaints"
+                label="شکایات در حال بررسی"
+                value={stats.reviewing}
+                hint="بررسی شروع شده و منتظر تصمیم است"
+                to="/admin/complaints?status=reviewing"
                 tone="info"
                 Icon={IconWarning}
               />
               <StatCard
-                label="پذیرفته‌شده"
-                value={overview.data.stats.resolved_complaints}
-                to="/admin/complaints"
+                label="شکایات حل‌شده"
+                value={stats.resolved}
+                hint="شکایت معتبر تشخیص داده شد"
+                to="/admin/complaints?status=resolved"
                 tone="success"
                 Icon={IconWarning}
               />
               <StatCard
-                label="رد شده"
-                value={overview.data.stats.rejected_complaints}
-                to="/admin/complaints"
+                label="شکایات ردشده"
+                value={stats.rejected}
+                hint="شکایت نامعتبر تشخیص داده شد"
+                to="/admin/complaints?status=rejected"
                 tone="neutral"
                 Icon={IconWarning}
               />
             </div>
           </section>
 
-          <section className="grid gap-4 lg:grid-cols-2">
-            <Card>
-              <CardHeader title="آخرین کاربران" />
-              <CardBody className="space-y-2">
-                {overview.data.activity.latest_users.map((user) => (
-                  <Link
-                    key={user.id}
-                    to={`/admin/users/${user.id}`}
-                    className="flex items-center justify-between gap-3 rounded-xl border border-ink-200 p-3 text-[13px] transition-colors hover:bg-brand-50/40"
-                  >
-                    <span className="min-w-0 truncate font-semibold text-ink-800">
-                      {user.full_name}
-                    </span>
-                    <span className="shrink-0 text-[11.5px] text-ink-400">
-                      {formatDate(user.created_at)}
-                    </span>
-                  </Link>
-                ))}
-              </CardBody>
-            </Card>
+          {open > 0 ? (
+            <Alert tone="warning" title={`${formatNumber(open)} شکایت باز دارید`}>
+              شکایت‌های «در انتظار بررسی» و «در حال بررسی» منتظر اقدام شما هستند.
+              <div className="mt-3">
+                <LinkButton to="/admin/complaints?status=pending" size="sm" variant="outline">
+                  رسیدگی به شکایات
+                </LinkButton>
+              </div>
+            </Alert>
+          ) : (
+            <Alert tone="success" title="شکایت بازی وجود ندارد">
+              همهٔ شکایت‌های ثبت‌شده نتیجه گرفته‌اند.
+            </Alert>
+          )}
 
-            <Card>
-              <CardHeader title="آخرین تسک‌ها" />
-              <CardBody className="space-y-2">
-                {overview.data.activity.latest_tasks.map((task) => (
-                  <Link
-                    key={task.id}
-                    to={`/admin/tasks/${task.id}`}
-                    className="flex items-center justify-between gap-3 rounded-xl border border-ink-200 p-3 text-[13px] transition-colors hover:bg-brand-50/40"
-                  >
-                    <span className="min-w-0 truncate font-semibold text-ink-800">{task.title}</span>
-                    <StatusBadge meta={metaOf(taskStatusMeta, task.status)} />
-                  </Link>
-                ))}
-              </CardBody>
-            </Card>
+          <Card>
+            <CardHeader
+              title="جمع‌بندی"
+              description="این اعداد مستقیماً از GET /api/admin/dashboard خوانده می‌شوند."
+            />
+            <CardBody>
+              <dl className="grid gap-3 sm:grid-cols-2">
+                <div className="flex items-center justify-between rounded-xl bg-ink-50 px-4 py-3">
+                  <dt className="text-[13px] font-semibold text-ink-600">کل شکایات</dt>
+                  <dd className="text-[15px] font-extrabold text-ink-900">{formatNumber(total)}</dd>
+                </div>
+                <div className="flex items-center justify-between rounded-xl bg-ink-50 px-4 py-3">
+                  <dt className="text-[13px] font-semibold text-ink-600">شکایات باز</dt>
+                  <dd className="text-[15px] font-extrabold text-amber-700">{formatNumber(open)}</dd>
+                </div>
+              </dl>
+            </CardBody>
+          </Card>
 
-            <Card>
-              <CardHeader title="آخرین پروژه‌ها" />
-              <CardBody className="space-y-2">
-                {overview.data.activity.latest_projects.map((project) => (
-                  <Link
-                    key={project.id}
-                    to={`/admin/projects/${project.id}`}
-                    className="flex items-center justify-between gap-3 rounded-xl border border-ink-200 p-3 text-[13px] transition-colors hover:bg-brand-50/40"
-                  >
-                    <span className="min-w-0 flex-1 truncate font-semibold text-ink-800">
-                      {project.title}
-                    </span>
-                    <span className="shrink-0 text-[11.5px] text-emerald-700">
-                      {formatToman(project.amount)}
-                    </span>
-                    <StatusBadge meta={metaOf(projectStatusMeta, project.status)} />
-                  </Link>
-                ))}
-              </CardBody>
-            </Card>
-
-            <Card>
-              <CardHeader title="آخرین شکایات" />
-              <CardBody className="space-y-2">
-                {overview.data.activity.latest_complaints.map((complaint) => (
-                  <Link
-                    key={complaint.id}
-                    to={`/admin/complaints/${complaint.id}`}
-                    className="flex items-center justify-between gap-3 rounded-xl border border-ink-200 p-3 text-[13px] transition-colors hover:bg-brand-50/40"
-                  >
-                    <span className="min-w-0 flex-1 truncate font-semibold text-ink-800">
-                      {complaint.title}
-                    </span>
-                    <span className="shrink-0 text-[11px] text-ink-400">
-                      پروژه {toPersianDigits(complaint.project_id)}
-                    </span>
-                    <StatusBadge meta={metaOf(complaintStatusMeta, complaint.status)} />
-                  </Link>
-                ))}
-              </CardBody>
-            </Card>
-          </section>
+          <Alert tone="info">
+            در این مرحله فقط <b>داشبورد</b> و <b>مدیریت شکایات</b> فعال هستند. بقیهٔ بخش‌های منو
+            هنوز در بک‌اند API ندارند و عمداً غیرفعال گذاشته شده‌اند.
+          </Alert>
         </>
       ) : null}
     </div>

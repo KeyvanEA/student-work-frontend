@@ -1,199 +1,139 @@
 /**
- * مدل‌های پنل ادمین.
+ * مدل‌های پنل ادمین — دقیقاً مطابق خروجی کنترلرهای بک‌اند:
+ *   app/Http/Controllers/Admin/AdminDashboardController.php
+ *   app/Http/Controllers/Admin/AdminComplaintController.php
  *
- * ساختار هر مدل عمداً بر اساس *جدول‌های واقعی دیتابیس* بک‌اند نوشته شده
- * (database/migrations/*) تا وقتی APIهای ادمین ساخته شدند، تغییر چندانی لازم نباشد.
+ * ⚠️ هیچ فیلدی اینجا اضافه نشده که بک‌اند برنگرداند.
  */
 
 import type {
-  ApplicationStatus,
+  Application,
   ComplaintStatus,
   DeliveryStatus,
+  Paginated,
   PaymentStatus,
+  Project,
   ProjectStatus,
-  TaskStatus,
+  Task,
+  User,
 } from '@/types/models'
 
-export interface AdminPaginated<T> {
-  data: T[]
-  current_page: number
-  last_page: number
-  per_page: number
-  total: number
+/** پاسخ GET /api/admin/dashboard */
+export interface AdminComplaintStats {
+  pending: number
+  reviewing: number
+  resolved: number
+  rejected: number
 }
 
-export interface AdminUserRow {
+export interface AdminDashboardResponse {
+  complaints: AdminComplaintStats
+}
+
+/**
+ * آیتم فهرست GET /api/admin/complaints
+ * select: id, project_id, user_id, title, status, created_at
+ * with: user(id,full_name,avatar) · project(id,application_id,amount) · project.application.task(id,title)
+ */
+export interface AdminComplaintListItem {
   id: number
-  full_name: string
-  mobile: string
-  student_number: string
-  field_of_study: string
-  university_name: string
-  is_active: boolean
-  created_at: string
-}
-
-export interface AdminUserDetail extends AdminUserRow {
-  email: string | null
-  bio: string | null
-  skills: Array<{ id: number; name: string }>
-  tasks_count: number
-  applications_count: number
-  projects_count: number
-}
-
-export interface AdminTaskRow {
-  id: number
+  project_id: number
+  user_id: number
   title: string
-  budget: number
-  deadline: string
-  status: TaskStatus
+  status: ComplaintStatus
   created_at: string
-  category: { id: number; name: string }
-  owner: { id: number; full_name: string }
+  user?: Pick<User, 'id' | 'full_name' | 'avatar'>
+  project?: {
+    id: number
+    application_id: number
+    amount: number
+    application?: {
+      id: number
+      task?: Pick<Task, 'id' | 'title'>
+    }
+  }
 }
 
-export interface AdminTaskDetail extends AdminTaskRow {
-  description: string
-  skills: Array<{ id: number; name: string }>
-  files_count: number
-  applications_count: number
-}
+export type AdminComplaintList = Paginated<AdminComplaintListItem>
 
-export interface AdminApplicationRow {
+/** فایل پیوست — بک‌اند در مسیرهای ادمین فقط مدل خام را می‌دهد (بدون URL دانلود) */
+export interface AdminAttachment {
   id: number
-  status: ApplicationStatus
-  created_at: string
-  task: { id: number; title: string }
-  applicant: { id: number; full_name: string }
-  employer: { id: number; full_name: string }
+  original_name: string
+  mime_type: string
+  size: number
+  file_path?: string
+  created_at?: string
 }
 
-export interface AdminApplicationDetail extends AdminApplicationRow {
-  description: string
-  files_count: number
-  project_id: number | null
-}
-
-export interface AdminProjectRow {
-  id: number
-  title: string
-  amount: number
-  deadline: string
-  status: ProjectStatus
-  payment_status: PaymentStatus
-  completed_at: string | null
-  created_at: string
-  employer: { id: number; full_name: string }
-  worker: { id: number; full_name: string }
-}
-
-export interface AdminProjectDetail extends AdminProjectRow {
-  application_id: number
-  task_id: number
-  started_at: string
-  deliveries_count: number
-  complaints_count: number
-}
-
-export interface AdminDeliveryRow {
+/** تحویل پروژه، آن‌طور که در پاسخ نمایش شکایت می‌آید (به همراه files) */
+export interface AdminDelivery {
   id: number
   project_id: number
   description: string
   status: DeliveryStatus
-  submitted_at: string
   rejection_reason: string | null
   edit_count: number
-  files: Array<{ id: number; original_name: string; mime_type: string; size: number }>
+  submitted_at: string
+  created_at?: string
+  files?: AdminAttachment[]
 }
 
-export interface AdminComplaintRow {
-  id: number
-  title: string
-  status: ComplaintStatus
-  created_at: string
-  project_id: number
-  complainant: { id: number; full_name: string }
-}
+/** پروفایلی که بک‌اند برای شاکی و طرف مقابل برمی‌گرداند */
+export type AdminParticipant = Pick<
+  User,
+  | 'id'
+  | 'full_name'
+  | 'avatar'
+  | 'mobile'
+  | 'student_number'
+  | 'field_of_study'
+  | 'university_name'
+>
 
-export interface AdminComplaintDetail extends AdminComplaintRow {
-  description: string
-  admin_response: string | null
-  /** شاکی در این پروژه کارفرما بوده یا کارجو — تعیین‌کنندهٔ مسیر بازگشت پروژه پس از داوری */
-  complainant_role: 'employer' | 'worker'
-  other_participant: { id: number; full_name: string }
-  project: {
+/**
+ * پاسخ GET /api/admin/complaints/{complaint}
+ * بک‌اند هر بخش را جداگانه و در سطح ریشه برمی‌گرداند.
+ */
+export interface AdminComplaintDetailResponse {
+  complaint: {
     id: number
+    title: string
+    description: string
+    status: ComplaintStatus
+    admin_response: string | null
+    created_at: string
+  }
+  complainant: AdminParticipant
+  other_party: AdminParticipant
+  task: Task
+  application: Application
+  project: Project & {
     status: ProjectStatus
     payment_status: PaymentStatus
     amount: number
     deadline: string
   }
-  task: { id: number; title: string }
-  application: { id: number }
-  attachments: Array<{ id: number; original_name: string; mime_type: string; size: number }>
-  deliveries: AdminDeliveryRow[]
+  deliveries: AdminDelivery[]
+  complaint_files: AdminAttachment[]
 }
 
-export interface AdminReviewRow {
-  id: number
-  project_id: number
-  project_title: string
-  reviewer: { id: number; full_name: string }
-  reviewed_user: { id: number; full_name: string }
-  is_satisfied: boolean
-  created_at: string
+/** پاسخ PATCH /api/admin/complaints/{complaint}/review */
+export interface AdminReviewResponse {
+  message: string
+  complaint: { id: number; status: ComplaintStatus }
 }
 
-export interface AdminCategoryRow {
-  id: number
-  name: string
-  slug: string
-  tasks_count: number
-  created_at: string
-}
+/**
+ * بدنهٔ PATCH /api/admin/complaints/{complaint}/resolve
+ * طبق ResolveComplaintRequest:
+ *   decision: valid|invalid
+ *   action:   required_if decision=valid · prohibited_if decision=invalid
+ *   admin_response: required, بین ۱۰ تا ۵۰۰۰ کاراکتر
+ */
+export type AdminDecision = 'valid' | 'invalid'
+export type AdminValidAction = 'revision' | 'cancel'
 
-export interface AdminSkillRow {
-  id: number
-  name: string
-  tasks_count: number
-  users_count: number
-  created_at: string
-}
-
-export interface AdminStats {
-  total_users: number
-  active_users: number
-  inactive_users: number
-  open_tasks: number
-  active_projects: number
-  completed_projects: number
-  disputed_projects: number
-  paid_projects: number
-  pending_complaints: number
-  reviewing_complaints: number
-  resolved_complaints: number
-  rejected_complaints: number
-}
-
-export interface AdminActivity {
-  latest_users: AdminUserRow[]
-  latest_tasks: AdminTaskRow[]
-  latest_projects: AdminProjectRow[]
-  latest_complaints: AdminComplaintRow[]
-}
-
-export interface AdminOverview {
-  stats: AdminStats
-  activity: AdminActivity
-}
-
-/** تصمیم ادمین دربارهٔ یک شکایت */
-export type ComplaintDecision = 'accept' | 'reject'
-
-export interface AdminComplaintDecisionInput {
-  decision: ComplaintDecision
-  admin_response: string
-  /** فقط وقتی شکایت وارد است: پروژه لغو شود یا به وضعیت قبلی برگردد */
-  cancelProject?: boolean
-}
+export type AdminResolveInput =
+  | { decision: 'invalid'; admin_response: string }
+  | { decision: 'valid'; action: AdminValidAction; admin_response: string }

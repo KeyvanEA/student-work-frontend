@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
+import { useAdminAccess } from '@/admin/AdminAccessContext'
 import { useAuth } from '@/auth/AuthContext'
 import { Logo } from '@/components/layout/Logo'
 import { Button } from '@/components/ui/Button'
@@ -29,16 +30,20 @@ export default function LoginPage() {
   const location = useLocation()
   const toast = useToast()
   const { login, status } = useAuth()
+  const { ensureChecked } = useAdminAccess()
 
   const [mobile, setMobile] = useState('')
   const [localError, setLocalError] = useState<string | null>(null)
 
-  const redirectTo = (location.state as { from?: string } | null)?.from ?? '/dashboard'
+  const from = (location.state as { from?: string } | null)?.from
+  const redirectTo = from ?? '/dashboard'
 
   const loginMutation = useMutation(async (value: string) => login(value), {
-    onSuccess: (user) => {
+    onSuccess: async (user) => {
       toast.success(`خوش آمدید، ${user.full_name}`)
-      navigate(redirectTo, { replace: true })
+      // ادمین بعد از ورود مستقیم وارد پنل می‌شود، مگر اینکه از مسیر مشخصی آمده باشد.
+      const isAdmin = await ensureChecked(user)
+      navigate(from ?? (isAdmin ? '/admin' : '/dashboard'), { replace: true })
     },
   })
 

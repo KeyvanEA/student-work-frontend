@@ -1,14 +1,20 @@
 import { useCallback, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
+import {
+  fetchAdminComplaint,
+  resolveAdminComplaint,
+  startAdminComplaintReview,
+} from '@/admin/api/adminApi'
 import { DetailList, DetailRow } from '@/components/domain/DetailList'
 import { StatusBadge } from '@/components/domain/StatusBadge'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Alert } from '@/components/ui/Alert'
+import { Avatar } from '@/components/ui/Avatar'
 import { Button } from '@/components/ui/Button'
 import { Card, CardBody, CardHeader } from '@/components/ui/Card'
 import { ErrorState } from '@/components/ui/ErrorState'
 import { Field } from '@/components/ui/Field'
-import { IconFile } from '@/components/ui/Icons'
+import { IconClock, IconFile, IconMoney } from '@/components/ui/Icons'
 import { Modal } from '@/components/ui/Modal'
 import { SkeletonDetail } from '@/components/ui/Skeleton'
 import { Textarea } from '@/components/ui/Textarea'
@@ -16,60 +22,153 @@ import { useToast } from '@/components/ui/Toast'
 import { useApiResource } from '@/hooks/useApiResource'
 import { useDocumentTitle } from '@/hooks/useDocumentTitle'
 import { useMutation } from '@/hooks/useMutation'
-import { formatBytes, formatDateTime, formatToman, toPersianDigits } from '@/lib/format'
+import {
+  deadlineInfo,
+  formatBytes,
+  formatDateTime,
+  formatToman,
+  toPersianDigits,
+} from '@/lib/format'
 import {
   complaintStatusMeta,
   metaOf,
   paymentStatusMeta,
   projectStatusMeta,
+  taskStatusMeta,
 } from '@/lib/labels'
-import { adminApi } from '../api/adminApi'
-import { plannedAdminEndpoints } from '../api/plannedEndpoints'
 import { AdminDeliveryList } from '../components/AdminDeliveryList'
-import { MockNotice } from '../components/MockNotice'
-import type { ComplaintDecision } from '../api/types'
+import type { AdminAttachment, AdminParticipant, AdminResolveInput } from '../api/types'
 
+/** سه تصمیمی که بک‌اند در ResolveComplaintRequest می‌پذیرد */
+type DecisionKey = 'invalid' | 'valid-revision' | 'valid-cancel'
+
+const DECISIONS: Record<
+  DecisionKey,
+  { label: string; title: string; description: string; tone: 'danger' | 'success'; confirm: string }
+> = {
+  invalid: {
+    label: 'رد شکایت / نامعتبر',
+    title: 'رد شکایت',
+    description: 'شکایت نامعتبر تشخیص داده می‌شود و پروژه به روند قبلی خود بازمی‌گردد.',
+    tone: 'danger',
+    confirm: 'ثبت رد شکایت',
+  },
+  'valid-revision': {
+    label: 'تأیید شکایت و درخواست اصلاح',
+    title: 'تأیید شکایت و درخواست اصلاح',
+    description: 'شکایت معتبر تشخیص داده می‌شود و پروژه برای ادامه فرآیند وارد مرحله بعدی می‌شود.',
+    tone: 'success',
+    confirm: 'ثبت تأیید شکایت',
+  },
+  'valid-cancel': {
+    label: 'تأیید شکایت و لغو پروژه',
+    title: 'تأیید شکایت و لغو پروژه',
+    description: 'شکایت معتبر تشخیص داده می‌شود و پروژه به‌طور کامل لغو می‌شود.',
+    tone: 'danger',
+    confirm: 'تأیید و لغو پروژه',
+  },
+}
+
+function toResolveInput(key: DecisionKey, adminResponse: string): AdminResolveInput {
+  // `action` طبق قانون prohibited_if هرگز همراه decision=invalid ارسال نمی‌شود
+  if (key === 'invalid') return { decision: 'invalid', admin_response: adminResponse }
+  return {
+    decision: 'valid',
+    action: key === 'valid-cancel' ? 'cancel' : 'revision',
+    admin_response: adminResponse,
+  }
+}
+
+function ParticipantCard({ title, person }: { title: string; person: AdminParticipant }) {
+  return (
+    <Card>
+      <CardHeader title={title} />
+      <CardBody className="space-y-3">
+        <div className="flex items-center gap-3">
+          <Avatar name={person.full_name} size="md" />
+          <div className="min-w-0">
+            <p className="truncate text-[13.5px] font-bold text-ink-800">{person.full_name}</p>
+            <p className="truncate text-[11.5px] text-ink-400" dir="ltr">
+              {person.mobile ? toPersianDigits(person.mobile) : '—'}
+            </p>
+          </div>
+        </div>
+
+        <DetailList className="border-t border-ink-100 pt-1">
+          <DetailRow
+            label="شماره دانشجویی"
+            value={person.student_number ? toPersianDigits(person.student_number) : '—'}
+          />
+          <DetailRow label="رشته تحصیلی" value={person.field_of_study || '—'} />
+          <DetailRow label="دانشگاه" value={person.university_name || '—'} />
+        </DetailList>
+      </CardBody>
+    </Card>
+  )
+}
+
+function AttachmentList({ files }: { files: AdminAttachment[] }) {
+  if (files.length === 0) {
+    return <p className="text-[13px] text-ink-400">فایلی پیوست نشده است.</p>
+  }
+
+  return (
+    <ul className="space-y-2">
+      {files.map((file) => (
+        <li
+          key={file.id}
+          className="flex items-center gap-2.5 rounded-xl border border-ink-200 p-3 text-[13px] text-ink-700"
+        >
+          <IconFile className="size-5 shrink-0 text-ink-400" />
+          <span className="min-w-0 flex-1 truncate">{file.original_name}</span>
+          <span className="shrink-0 text-[11.5px] text-ink-400">
+            {formatBytes(file.size)} · {file.mime_type}
+          </span>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+/** پروندهٔ کامل یک شکایت + شروع بررسی + ثبت نتیجه */
 export default function AdminComplaintDetailPage() {
   const { complaintId = '' } = useParams()
   const toast = useToast()
 
-  const loader = useCallback(() => adminApi.complaint(Number(complaintId)), [complaintId])
-  const complaint = useApiResource(loader, [complaintId])
+  const loader = useCallback(
+    (signal: AbortSignal) => fetchAdminComplaint(complaintId, signal),
+    [complaintId],
+  )
+  const resource = useApiResource(loader, [complaintId])
 
-  useDocumentTitle(complaint.data ? `${complaint.data.title} — ادمین` : 'شکایت — ادمین')
+  useDocumentTitle(resource.data ? `${resource.data.complaint.title} — ادمین` : 'شکایت — ادمین')
 
-  const [decisionOpen, setDecisionOpen] = useState<ComplaintDecision | null>(null)
-  const [response, setResponse] = useState('')
-  const [cancelProject, setCancelProject] = useState(false)
+  const [decision, setDecision] = useState<DecisionKey | null>(null)
+  const [adminResponse, setAdminResponse] = useState('')
 
-  const reviewMutation = useMutation(() => adminApi.startComplaintReview(Number(complaintId)), {
-    onSuccess: () => {
-      toast.success('بررسی این شکایت شروع شد.')
-      complaint.reload()
+  const reviewMutation = useMutation(() => startAdminComplaintReview(complaintId), {
+    onSuccess: (result) => {
+      toast.success(result.message)
+      resource.reload()
     },
     onError: (error) => toast.error(error.message),
   })
 
-  const decisionMutation = useMutation(
-    (decision: ComplaintDecision) =>
-      adminApi.decideComplaint(Number(complaintId), {
-        decision,
-        admin_response: response.trim(),
-        cancelProject,
-      }),
+  const resolveMutation = useMutation(
+    (key: DecisionKey) => resolveAdminComplaint(complaintId, toResolveInput(key, adminResponse.trim())),
     {
-      onSuccess: () => {
-        toast.success('نتیجه بررسی ثبت شد.')
-        setDecisionOpen(null)
-        setResponse('')
-        setCancelProject(false)
-        complaint.reload()
+      onSuccess: (result) => {
+        toast.success(result.message)
+        setDecision(null)
+        setAdminResponse('')
+        // پاسخ resolve فقط پیام دارد؛ وضعیت جدید شکایت و پروژه را دوباره می‌خوانیم
+        resource.reload()
       },
       onError: (error) => toast.error(error.message),
     },
   )
 
-  if (complaint.loading) {
+  if (resource.loading) {
     return (
       <div>
         <PageHeader title="شکایت" backTo="/admin/complaints" backLabel="همه شکایات" />
@@ -78,36 +177,39 @@ export default function AdminComplaintDetailPage() {
     )
   }
 
-  if (complaint.error || !complaint.data) {
+  if (resource.error || !resource.data) {
     return (
       <div>
         <PageHeader title="شکایت" backTo="/admin/complaints" backLabel="همه شکایات" />
-        {complaint.error ? <ErrorState error={complaint.error} onRetry={complaint.reload} /> : null}
+        {resource.error ? <ErrorState error={resource.error} onRetry={resource.reload} /> : null}
       </div>
     )
   }
 
-  const data = complaint.data
-  const isOpen = data.status === 'pending' || data.status === 'reviewing'
-  const responseValid = response.trim().length >= 10
+  const { complaint, complainant, other_party, task, application, project, deliveries } =
+    resource.data
+  const complaintFiles = resource.data.complaint_files ?? []
 
-  /**
-   * شکایت کارفرما وقتی پروژه «تحویل شده» است ثبت می‌شود و شکایت کارجو وقتی پروژه
-   * «نیازمند اصلاح» است. نتیجهٔ داوری، پروژه را به همان مسیر برمی‌گرداند.
-   */
-  const complainantRole = data.complainant_role === 'employer' ? 'کارفرما' : 'کارجو'
+  const isPending = complaint.status === 'pending'
+  const isReviewing = complaint.status === 'reviewing'
+  const isClosed = complaint.status === 'resolved' || complaint.status === 'rejected'
+
+  /** بک‌اند حداقل ۱۰ و حداکثر ۵۰۰۰ کاراکتر می‌خواهد */
+  const responseValue = adminResponse.trim()
+  const responseValid = responseValue.length >= 10 && responseValue.length <= 5000
+  const deadline = deadlineInfo(project.deadline)
 
   return (
     <div className="space-y-4">
       <PageHeader
-        title={data.title}
-        description={`شناسه شکایت: ${toPersianDigits(data.id)} · ثبت ${formatDateTime(
-          data.created_at,
+        title={complaint.title}
+        description={`شناسه شکایت: ${toPersianDigits(complaint.id)} · ثبت ${formatDateTime(
+          complaint.created_at,
         )}`}
         backTo="/admin/complaints"
         backLabel="همه شکایات"
         action={
-          data.status === 'pending' ? (
+          isPending ? (
             <Button
               size="sm"
               onClick={() => void reviewMutation.run()}
@@ -119,150 +221,140 @@ export default function AdminComplaintDetailPage() {
         }
       />
 
-      <MockNotice
-        endpoints={[
-          `GET ${plannedAdminEndpoints.complaint('{complaint}')}`,
-          `PATCH ${plannedAdminEndpoints.complaintReview('{complaint}')}`,
-          `PATCH ${plannedAdminEndpoints.complaintDecision('{complaint}')}`,
-        ]}
-      />
+      {reviewMutation.error ? <ErrorState error={reviewMutation.error} compact /> : null}
 
       <Card>
         <CardBody className="space-y-4">
           <div className="flex flex-wrap items-center gap-2">
-            <StatusBadge meta={metaOf(complaintStatusMeta, data.status)} />
-            <StatusBadge meta={metaOf(projectStatusMeta, data.project.status)} />
-            <StatusBadge meta={metaOf(paymentStatusMeta, data.project.payment_status)} />
+            <StatusBadge meta={metaOf(complaintStatusMeta, complaint.status)} />
+            <StatusBadge meta={metaOf(projectStatusMeta, project.status)} />
+            <StatusBadge meta={metaOf(paymentStatusMeta, project.payment_status)} />
           </div>
 
           <div className="border-t border-ink-100 pt-4">
             <h2 className="mb-1.5 text-[14px] font-bold text-ink-900">شرح شکایت</h2>
             <p className="whitespace-pre-line text-[13.5px] leading-8 text-ink-600">
-              {data.description}
+              {complaint.description}
             </p>
           </div>
         </CardBody>
       </Card>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <Card>
-          <CardHeader title="طرفین پرونده" />
-          <CardBody>
-            <DetailList>
-              <DetailRow
-                label="شاکی"
-                value={
-                  <Link
-                    to={`/admin/users/${data.complainant.id}`}
-                    className="font-semibold text-brand-600 hover:underline"
-                  >
-                    {data.complainant.full_name}
-                  </Link>
-                }
-              />
-              <DetailRow
-                label="طرف مقابل"
-                value={
-                  <Link
-                    to={`/admin/users/${data.other_participant.id}`}
-                    className="font-semibold text-brand-600 hover:underline"
-                  >
-                    {data.other_participant.full_name}
-                  </Link>
-                }
-              />
-              <DetailRow label="نقش شاکی" value={complainantRole} />
-            </DetailList>
-          </CardBody>
-        </Card>
-
-        <Card>
-          <CardHeader title="زمینهٔ پرونده" />
-          <CardBody>
-            <DetailList>
-              <DetailRow
-                label="پروژه"
-                value={
-                  <Link
-                    to={`/admin/projects/${data.project.id}`}
-                    className="font-semibold text-brand-600 hover:underline"
-                  >
-                    پروژه {toPersianDigits(data.project.id)}
-                  </Link>
-                }
-              />
-              <DetailRow
-                label="تسک"
-                value={
-                  <Link
-                    to={`/admin/tasks/${data.task.id}`}
-                    className="font-semibold text-brand-600 hover:underline"
-                  >
-                    {data.task.title}
-                  </Link>
-                }
-              />
-              <DetailRow
-                label="درخواست همکاری"
-                value={
-                  <Link
-                    to={`/admin/applications/${data.application.id}`}
-                    className="font-semibold text-brand-600 hover:underline"
-                  >
-                    درخواست {toPersianDigits(data.application.id)}
-                  </Link>
-                }
-              />
-              <DetailRow
-                label="مبلغ پروژه"
-                value={<span className="text-emerald-700">{formatToman(data.project.amount)}</span>}
-              />
-              <DetailRow label="مهلت تحویل" value={formatDateTime(data.project.deadline)} />
-            </DetailList>
-          </CardBody>
-        </Card>
+        <ParticipantCard title="شاکی" person={complainant} />
+        <ParticipantCard title="طرف مقابل" person={other_party} />
       </div>
 
       <Card>
-        <CardHeader title="مدارک پیوست شکایت" />
+        <CardHeader title="تسک" description={task?.category?.name} />
+        <CardBody className="space-y-3">
+          <p className="text-[14px] font-bold text-ink-900">{task?.title ?? '—'}</p>
+          {task?.description ? (
+            <p className="whitespace-pre-line text-[13px] leading-8 text-ink-600">
+              {task.description}
+            </p>
+          ) : null}
+          <DetailList className="border-t border-ink-100 pt-1">
+            <DetailRow label="شناسه تسک" value={toPersianDigits(task?.id ?? '—')} />
+            <DetailRow
+              label="بودجه"
+              value={
+                task?.budget !== undefined ? (
+                  <span className="text-emerald-700">{formatToman(task.budget)}</span>
+                ) : (
+                  '—'
+                )
+              }
+            />
+            <DetailRow
+              label="وضعیت تسک"
+              value={task ? <StatusBadge meta={metaOf(taskStatusMeta, task.status)} /> : '—'}
+            />
+          </DetailList>
+        </CardBody>
+      </Card>
+
+      <Card>
+        <CardHeader title="درخواست همکاری" />
+        <CardBody className="space-y-3">
+          {application?.description ? (
+            <p className="whitespace-pre-line text-[13px] leading-8 text-ink-600">
+              {application.description}
+            </p>
+          ) : null}
+          <DetailList className="border-t border-ink-100 pt-1">
+            <DetailRow label="شناسه درخواست" value={toPersianDigits(application?.id ?? '—')} />
+            <DetailRow
+              label="تاریخ ارسال"
+              value={application?.created_at ? formatDateTime(application.created_at) : '—'}
+            />
+          </DetailList>
+        </CardBody>
+      </Card>
+
+      <Card>
+        <CardHeader title="پروژه" />
         <CardBody>
-          {data.attachments.length === 0 ? (
-            <p className="text-[13px] text-ink-400">مدرکی پیوست نشده است.</p>
-          ) : (
-            <ul className="space-y-2">
-              {data.attachments.map((file) => (
-                <li
-                  key={file.id}
-                  className="flex items-center gap-2.5 rounded-xl border border-ink-200 p-3 text-[13px] text-ink-700"
-                >
-                  <IconFile className="size-5 shrink-0 text-ink-400" />
-                  <span className="min-w-0 flex-1 truncate">{file.original_name}</span>
-                  <span className="shrink-0 text-[11.5px] text-ink-400">
-                    {formatBytes(file.size)} · {file.mime_type}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
+          <DetailList>
+            <DetailRow label="شناسه پروژه" value={toPersianDigits(project.id)} />
+            <DetailRow
+              label="مبلغ"
+              icon={<IconMoney className="size-4" />}
+              value={<span className="text-emerald-700">{formatToman(project.amount)}</span>}
+            />
+            <DetailRow
+              label="مهلت تحویل"
+              icon={<IconClock className="size-4" />}
+              value={
+                <span className={deadline.tone === 'danger' ? 'text-rose-600' : undefined}>
+                  {formatDateTime(project.deadline)} · {deadline.label}
+                </span>
+              }
+            />
+            <DetailRow
+              label="وضعیت پروژه"
+              value={<StatusBadge meta={metaOf(projectStatusMeta, project.status)} />}
+            />
+            <DetailRow
+              label="وضعیت پرداخت"
+              value={<StatusBadge meta={metaOf(paymentStatusMeta, project.payment_status)} />}
+            />
+          </DetailList>
         </CardBody>
       </Card>
 
       <Card>
         <CardHeader
-          title="تاریخچه تحویل‌ها و رد شدن‌ها"
-          description="برای داوری، مسیر کامل تحویل‌های این پروژه را ببینید."
+          title="تحویل‌های پروژه"
+          description="تاریخچهٔ کامل تحویل‌ها، دلایل رد شدن و فایل‌ها"
         />
         <CardBody>
-          <AdminDeliveryList deliveries={data.deliveries} />
+          <AdminDeliveryList deliveries={deliveries ?? []} />
         </CardBody>
       </Card>
 
       <Card>
-        <CardHeader title="پاسخ ادمین" />
+        <CardHeader
+          title="فایل‌های شکایت"
+          description="مدارکی که شاکی همراه شکایت ارسال کرده است"
+        />
+        <CardBody className="space-y-3">
+          <AttachmentList files={complaintFiles} />
+          {complaintFiles.length > 0 ? (
+            <p className="text-[11.5px] leading-6 text-ink-400">
+              بک‌اند برای فایل‌های پیوست در مسیرهای ادمین نشانی دانلود برنمی‌گرداند، بنابراین اینجا
+              فقط مشخصات فایل نمایش داده می‌شود.
+            </p>
+          ) : null}
+        </CardBody>
+      </Card>
+
+      <Card>
+        <CardHeader title="پاسخ مدیر" />
         <CardBody>
-          {data.admin_response ? (
+          {complaint.admin_response ? (
             <p className="whitespace-pre-line text-[13.5px] leading-8 text-ink-700">
-              {data.admin_response}
+              {complaint.admin_response}
             </p>
           ) : (
             <p className="text-[13px] text-ink-400">هنوز پاسخی ثبت نشده است.</p>
@@ -270,98 +362,124 @@ export default function AdminComplaintDetailPage() {
         </CardBody>
       </Card>
 
-      {isOpen ? (
+      {isPending ? (
+        <Alert tone="info" title="برای تصمیم‌گیری ابتدا بررسی را شروع کنید">
+          تا وقتی شکایت در وضعیت «در انتظار بررسی» است، امکان ثبت نتیجه وجود ندارد.
+        </Alert>
+      ) : null}
+
+      {isReviewing ? (
         <Card className="border-brand-200">
           <CardHeader
-            title="تصمیم‌گیری"
-            description="نتیجهٔ بررسی، وضعیت پروژه را طبق Business Flow برمی‌گرداند."
+            title="ثبت نتیجه بررسی"
+            description="یکی از سه تصمیم زیر را انتخاب کنید؛ در مرحلهٔ بعد پاسخ مدیر را می‌نویسید."
           />
           <CardBody className="space-y-3">
-            <Alert tone="info">
-              اگر شکایت <b>وارد</b> باشد، پروژه به مسیر اصلاح یا تحویل برمی‌گردد (یا در صورت لزوم لغو
-              می‌شود). اگر <b>وارد نباشد</b>، پروژه به وضعیت پیش از داوری بازمی‌گردد. در هر دو حالت
-              باید برای کاربر مربوطه اعلان ساخته شود.
+            <Alert tone="warning">
+              نتیجهٔ بررسی برای هر دو طرف اعلان می‌سازد و وضعیت پروژه را تغییر می‌دهد. این کار قابل
+              بازگشت نیست.
             </Alert>
 
-            <div className="flex flex-wrap gap-2">
-              <Button
-                variant="success"
-                onClick={() => {
-                  setResponse('')
-                  setCancelProject(false)
-                  setDecisionOpen('accept')
-                }}
-              >
-                پذیرش شکایت
-              </Button>
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
               <Button
                 variant="danger"
                 onClick={() => {
-                  setResponse('')
-                  setCancelProject(false)
-                  setDecisionOpen('reject')
+                  setAdminResponse('')
+                  setDecision('invalid')
                 }}
               >
-                رد شکایت
+                {DECISIONS.invalid.label}
+              </Button>
+              <Button
+                variant="success"
+                onClick={() => {
+                  setAdminResponse('')
+                  setDecision('valid-revision')
+                }}
+              >
+                {DECISIONS['valid-revision'].label}
+              </Button>
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setAdminResponse('')
+                  setDecision('valid-cancel')
+                }}
+              >
+                {DECISIONS['valid-cancel'].label}
               </Button>
             </div>
           </CardBody>
         </Card>
       ) : null}
 
+      {isClosed ? (
+        <Alert
+          tone={complaint.status === 'resolved' ? 'success' : 'neutral'}
+          title={
+            complaint.status === 'resolved'
+              ? 'این شکایت معتبر تشخیص داده شد'
+              : 'این شکایت نامعتبر تشخیص داده شد'
+          }
+        >
+          نتیجه ثبت شده و امکان بررسی یا تغییر دوباره وجود ندارد. وضعیت فعلی پروژه:{' '}
+          <b>{metaOf(projectStatusMeta, project.status).label}</b>
+        </Alert>
+      ) : null}
+
       <Modal
-        open={decisionOpen !== null}
-        onClose={() => setDecisionOpen(null)}
-        title={decisionOpen === 'accept' ? 'پذیرش شکایت' : 'رد شکایت'}
-        description="پاسخ ادمین برای طرفین پرونده ثبت و از طریق اعلان اطلاع داده می‌شود."
+        open={decision !== null}
+        onClose={() => setDecision(null)}
+        title={decision ? DECISIONS[decision].title : ''}
+        description={decision ? DECISIONS[decision].description : undefined}
         footer={
           <>
             <Button
               variant="secondary"
-              onClick={() => setDecisionOpen(null)}
-              disabled={decisionMutation.loading}
+              onClick={() => setDecision(null)}
+              disabled={resolveMutation.loading}
             >
               انصراف
             </Button>
             <Button
-              variant={decisionOpen === 'accept' ? 'success' : 'danger'}
-              loading={decisionMutation.loading}
+              variant={decision ? DECISIONS[decision].tone : 'primary'}
+              loading={resolveMutation.loading}
               disabled={!responseValid}
-              onClick={() => decisionOpen && void decisionMutation.run(decisionOpen)}
+              onClick={() => decision && void resolveMutation.run(decision)}
             >
-              ثبت نتیجه
+              {decision ? DECISIONS[decision].confirm : 'ثبت'}
             </Button>
           </>
         }
       >
         <div className="space-y-4">
-          {decisionMutation.error ? <ErrorState error={decisionMutation.error} compact /> : null}
+          {resolveMutation.error ? <ErrorState error={resolveMutation.error} compact /> : null}
 
-          <Field label="پاسخ ادمین" required hint="حداقل ۱۰ کاراکتر — برای طرفین نمایش داده می‌شود">
+          {decision === 'valid-cancel' ? (
+            <Alert tone="danger" title="پروژه لغو می‌شود">
+              با این تصمیم پروژه به وضعیت «لغو شده» می‌رود و ادامهٔ همکاری ممکن نخواهد بود.
+            </Alert>
+          ) : null}
+
+          <Field
+            label="پاسخ مدیر"
+            required
+            hint="بین ۱۰ تا ۵۰۰۰ کاراکتر — این متن برای هر دو طرف ارسال می‌شود"
+            error={
+              adminResponse.length > 0 && !responseValid
+                ? 'پاسخ مدیر باید بین ۱۰ تا ۵۰۰۰ کاراکتر باشد.'
+                : resolveMutation.error?.fieldError('admin_response')
+            }
+          >
             <Textarea
-              value={response}
-              onChange={(event) => setResponse(event.target.value)}
+              value={adminResponse}
+              onChange={(event) => setAdminResponse(event.target.value)}
               rows={6}
-              placeholder="نتیجه بررسی و دلیل آن را بنویسید…"
+              maxLength={5000}
+              invalid={adminResponse.length > 0 && !responseValid}
+              placeholder="دلیل تصمیم و توضیح لازم برای طرفین را بنویسید…"
             />
           </Field>
-
-          {decisionOpen === 'accept' ? (
-            <label className="flex items-start gap-2.5 rounded-xl border border-ink-200 p-3">
-              <input
-                type="checkbox"
-                checked={cancelProject}
-                onChange={(event) => setCancelProject(event.target.checked)}
-                className="mt-0.5 size-4 accent-rose-600"
-              />
-              <span className="text-[12.5px] leading-6 text-ink-600">
-                پروژه لغو شود
-                <span className="mt-0.5 block text-[11.5px] text-ink-400">
-                  اگر این گزینه انتخاب نشود، پروژه به مسیر عادی (اصلاح یا تحویل) برمی‌گردد.
-                </span>
-              </span>
-            </label>
-          ) : null}
         </div>
       </Modal>
     </div>

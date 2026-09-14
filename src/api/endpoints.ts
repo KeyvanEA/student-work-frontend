@@ -3,9 +3,7 @@
  * هر مسیر اینجا دقیقاً معادل یک route ثبت‌شده در routes/api.php بک‌اند است.
  * ⚠️ هیچ endpoint خیالی اینجا اضافه نشود.
  *
- * آخرین sync با routes/api.php (commit fe89683).
- * مسیرهای Admin عمداً اینجا نیستند؛ بک‌اند هنوز آن‌ها را ندارد و در
- * src/admin/api/plannedEndpoints.ts به‌عنوان «طراحی‌شده ولی پیاده‌نشده» نگهداری می‌شوند.
+ * آخرین sync با routes/api.php (commit 7826987).
  */
 
 export const API_PREFIX = '/api'
@@ -66,4 +64,14 @@ export const endpoints = {
 
   // ---- Notifications ----
   notifications: () => `${API_PREFIX}/notifications`,
+
+  // ---- Admin (middleware: auth:sanctum + admin) ----
+  adminDashboard: () => `${API_PREFIX}/admin/dashboard`,
+  adminComplaints: () => `${API_PREFIX}/admin/complaints`,
+  adminComplaint: (complaintId: number | string) =>
+    `${API_PREFIX}/admin/complaints/${complaintId}`,
+  adminComplaintReview: (complaintId: number | string) =>
+    `${API_PREFIX}/admin/complaints/${complaintId}/review`,
+  adminComplaintResolve: (complaintId: number | string) =>
+    `${API_PREFIX}/admin/complaints/${complaintId}/resolve`,
 } as const

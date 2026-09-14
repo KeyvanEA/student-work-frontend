@@ -3,7 +3,7 @@
 فرانت‌اند پلتفرم **استودنت‌ورک**؛ یک SPA مستقل که فقط از طریق REST API با بک‌اند Laravel (Sanctum) حرف می‌زند.
 
 > بک‌اند در `../student-work` قرار دارد و **تغییری در آن داده نشده است**.
-> این فرانت با `routes/api.php` نسخهٔ فعلی بک‌اند (commit `fe89683`) sync شده است.
+> این فرانت با `routes/api.php` نسخهٔ فعلی بک‌اند (commit `7826987`) sync شده است.
 
 ---
 
@@ -72,7 +72,9 @@ npm run build && npm run preview
 /complaints/mine · /complaints/related · /complaints/:id
 /satisfaction
 
-/admin/*                ← پنل ادمین (چیدمان و نشست جدا)
+/admin                  ← داشبورد ادمین (آمار شکایات)
+/admin/complaints       ← فهرست شکایات
+/admin/complaints/:id   ← پروندهٔ شکایت (شروع بررسی · ثبت نتیجه)
 ```
 
 `/` دیگر داشبورد نیست. پوستهٔ عمومی (`PublicLayout`) و پوستهٔ داشبورد (`AppShell`) دو کامپوننت جدا هستند.
@@ -98,11 +100,11 @@ src/
 │   ├── home/           ← HeroSlider
 │   └── domain/         ← TaskCard, ProjectCard, ApplicationListCard, DeliveryListRow,
 │                          StatCard, SegmentedTabs, FlowStepper, …
-├── admin/              ← پنل ادمین، کاملاً جدا از لایهٔ API واقعی
-│   ├── api/                plannedEndpoints.ts · adminApi.ts · mockAdapter.ts · types.ts
-│   ├── components/         AdminLayout, AdminGuard, AdminTable, MockNotice, …
-│   ├── pages/              داشبورد، کاربران، تسک‌ها، درخواست‌ها، پروژه‌ها، شکایات، رضایت‌ها، …
-│   └── AdminAuthContext.tsx
+├── admin/              ← پنل ادمین (همان Authentication پروژه، بدون ورود جداگانه)
+│   ├── api/                adminApi.ts · types.ts
+│   ├── components/         AdminLayout, AdminGuard, AdminTable, AdminDeliveryList, adminNavItems
+│   ├── pages/              AdminDashboardPage · AdminComplaintsPage · AdminComplaintDetailPage
+│   └── AdminAccessContext.tsx
 ├── lib/                ← format (تاریخ شمسی، تومان، ارقام فارسی)، labels، mock/categories
 ├── pages/              ← یک فایل به ازای هر صفحهٔ کاربر
 └── types/models.ts     ← تایپ‌ها دقیقاً مطابق خروجی کنترلرهای Laravel
@@ -142,20 +144,57 @@ src/
 
 ## پنل ادمین
 
-UI پنل ادمین **کامل ساخته شده** (routeها، types، لایهٔ سرویس، جدول‌ها، فیلترها، فرم‌ها) اما بک‌اند هنوز
-هیچ مسیر `/api/admin/...` ندارد.
+ورود ادمین **جداگانه نیست**: همان `POST /api/login` و همان توکن Sanctum. مسیرهای
+`/api/admin/*` در بک‌اند پشت middleware `auth:sanctum` + `admin` هستند و امنیت واقعی همان‌جاست؛
+فرانت فقط UI را بر اساس نقش کنترل می‌کند.
 
-- `src/admin/api/plannedEndpoints.ts` — مسیرهای طراحی‌شده، صرفاً به‌عنوان قرارداد آینده.
-- `src/admin/api/adminApi.ts` — لایهٔ سرویس؛ امضای توابع همانی است که با API واقعی خواهد بود.
-- `src/admin/api/mockAdapter.ts` — دادهٔ موقت درون‌حافظه‌ای.
+### تشخیص نقش
 
-**هیچ درخواست واقعی به `/api/admin/...` ارسال نمی‌شود.** هر صفحهٔ ادمین بالای خود یک هشدار صریح دارد که
-دادهٔ آن از Mock Adapter می‌آید و کدام endpointها هنوز ساخته نشده‌اند. برای اتصال به API واقعی کافی است
-بدنهٔ همان تابع در `adminApi.ts` از `adminMock.x(...)` به `apiRequest(...)` تغییر کند.
+بک‌اند از `spatie/laravel-permission` استفاده می‌کند و نقش یک **رابطه** است، نه ستون جدول کاربران.
+`POST /api/login`، `GET /api/user` و `GET /api/profile` این رابطه را eager-load نمی‌کنند، بنابراین
+`roles` در پاسخ نیست. `AdminAccessContext` به این ترتیب عمل می‌کند:
 
-نشست ادمین جدا از نشست کاربر است (`sessionStorage`، `AdminAuthContext`). چون بک‌اند نه احراز هویت ادمین
-دارد و نه ستون `role` در جدول `users`، **هیچ ستون یا نقش جدیدی اختراع نشده**؛ فقط یک گیت محلی و موقت
-گذاشته شده تا کاربر عادی UI ادمین را نبیند. رمز موقت توسعه: `studentwork-admin`.
+1. اگر روزی پاسخ کاربر `roles` داشت، از همان خوانده می‌شود (بدون درخواست اضافه).
+2. در غیر این صورت یک بار `GET /api/admin/dashboard` زده می‌شود: **۲۰۰ یعنی ادمین، ۴۰۳ یعنی کاربر عادی**.
+
+نتیجه در `sessionStorage` به‌ازای هر کاربر cache می‌شود تا این بررسی تکرار نشود. هیچ endpoint
+اختراعی و هیچ شماره‌موبایل hard-code شده‌ای در کار نیست.
+
+> افزودن `$user->load('roles')` در `AuthController` این بررسی اضافه را کاملاً حذف می‌کند.
+
+بعد از ورود، ادمین مستقیماً وارد `/admin` می‌شود و کاربر عادی وارد `/dashboard`.
+
+### چه چیزی واقعاً کار می‌کند
+
+| بخش | مسیر | API |
+|---|---|---|
+| داشبورد | `/admin` | `GET /api/admin/dashboard` |
+| فهرست شکایات | `/admin/complaints` | `GET /api/admin/complaints[?status=…]` |
+| پروندهٔ شکایت | `/admin/complaints/:id` | `GET /api/admin/complaints/{complaint}` |
+| شروع بررسی | — | `PATCH /api/admin/complaints/{complaint}/review` |
+| ثبت نتیجه | — | `PATCH /api/admin/complaints/{complaint}/resolve` |
+
+ثبت نتیجه سه حالت دارد، دقیقاً مطابق `ResolveComplaintRequest`:
+
+| دکمه | بدنهٔ ارسالی |
+|---|---|
+| رد شکایت / نامعتبر | `{ decision: "invalid", admin_response }` |
+| تأیید شکایت و درخواست اصلاح | `{ decision: "valid", action: "revision", admin_response }` |
+| تأیید شکایت و لغو پروژه | `{ decision: "valid", action: "cancel", admin_response }` |
+
+`action` در حالت `invalid` اصلاً ارسال نمی‌شود (قانون `prohibited_if`). `admin_response` در هر سه
+حالت الزامی است و بین ۱۰ تا ۵۰۰۰ کاراکتر اعتبارسنجی می‌شود. پاسخ `resolve` فقط پیام دارد، بنابراین
+بعد از موفقیت پرونده دوباره خوانده می‌شود تا وضعیت جدید شکایت **و پروژه** نمایش داده شود.
+
+### بخش‌های عمداً غیرفعال
+
+این گزینه‌ها در Sidebar دیده می‌شوند ولی **هیچ مسیر، درخواست یا داده‌ای ندارند** — چون بک‌اند
+برایشان API ندارد و طبق نیازمندی نباید Mock ساخته شود:
+
+مدیریت کاربران · مدیریت تسک‌ها · مدیریت درخواست‌های همکاری · مدیریت پروژه‌ها ·
+مدیریت رضایت و نظرات · مدیریت دسته‌بندی‌ها · مدیریت مهارت‌ها · مدیریت پرداخت‌ها
+
+هر کدام با نشان «به‌زودی» و `aria-disabled` رندر می‌شوند و کلیک هیچ اثری ندارد.
 
 ---
 
@@ -207,7 +246,10 @@ UI پنل ادمین **کامل ساخته شده** (routeها، types، لای�
 6. **`GET /api/categories`** وجود ندارد؛ فهرست دسته‌بندی‌ها در `src/lib/mock/categories.ts` از روی
    `CategorySeeder` نگه داشته می‌شود.
 7. **آواتار و رزومه** URL عمومی ندارند؛ آواتار متنی نمایش داده می‌شود.
-8. **مسیرهای OTP** و **مسیرهای ادمین** وجود ندارند.
+8. **مسیرهای OTP** وجود ندارند.
+9. **نقش کاربر** در پاسخ `/api/login`، `/api/user` و `/api/profile` برنمی‌گردد (بخش «پنل ادمین»).
+10. **فایل‌های پیوست در مسیرهای ادمین** فقط مدل خام‌اند و نشانی دانلود ندارند؛ بنابراین در پروندهٔ
+    شکایت فقط نام، حجم و نوع فایل نمایش داده می‌شود و لینکی ساخته نمی‌شود.
 
 هرجا چنین کمبودی هست، در کد یک کامنت `TODO(backend)` یا توضیح صریح گذاشته شده است.
 
@@ -224,4 +266,5 @@ UI پنل ادمین **کامل ساخته شده** (routeها، types، لای�
 `/projects/active/worker` → `/projects/{id}` → «ثبت تحویل» → پیش‌نمایش/دانلود → ثبت رضایت
 
 **ادمین**
-`/admin/login` (رمز موقت `studentwork-admin`) → `/admin` → شکایات، کاربران، تسک‌ها، پروژه‌ها
+`/login` با شمارهٔ حساب ادمین → به‌صورت خودکار `/admin` → `/admin/complaints` →
+باز کردن یک شکایت → «شروع بررسی» → یکی از سه تصمیم + پاسخ مدیر

@@ -1,129 +1,76 @@
 /**
- * لایهٔ سرویس پنل ادمین.
+ * لایهٔ ارتباط پنل ادمین با بک‌اند.
  *
- * تنها جایی که صفحات ادمین برای گرفتن داده صدا می‌زنند. هر تابع دقیقاً معادل یک
- * endpoint طراحی‌شده در plannedEndpoints.ts است.
- *
- * ⚠️ تا وقتی بک‌اند مسیرهای /api/admin/... را نساخته، هر تابع به `adminMock` وصل است و
- * هیچ درخواست شبکه‌ای ارسال نمی‌شود. برای سوییچ به API واقعی کافی است بدنهٔ همان تابع
- * از `adminMock.x(...)` به `apiRequest(plannedAdminEndpoints.x(), ...)` تغییر کند؛
- * امضای توابع و shape داده‌ها همان می‌ماند.
+ * همهٔ این مسیرها در routes/api.php پشت middleware `auth:sanctum` + `admin` ثبت شده‌اند
+ * و از همان توکن و همان client کاربر عادی استفاده می‌کنند. هیچ Mock ای اینجا نیست.
  */
 
-import { adminMock } from './mockAdapter'
+import { apiRequest } from '@/api/client'
+import { endpoints } from '@/api/endpoints'
+import type { ComplaintStatus } from '@/types/models'
 import type {
-  AdminApplicationDetail,
-  AdminApplicationRow,
-  AdminCategoryRow,
-  AdminComplaintDecisionInput,
-  AdminComplaintDetail,
-  AdminComplaintRow,
-  AdminDeliveryRow,
-  AdminOverview,
-  AdminPaginated,
-  AdminProjectDetail,
-  AdminProjectRow,
-  AdminReviewRow,
-  AdminSkillRow,
-  AdminTaskDetail,
-  AdminTaskRow,
-  AdminUserDetail,
-  AdminUserRow,
+  AdminComplaintDetailResponse,
+  AdminComplaintList,
+  AdminDashboardResponse,
+  AdminResolveInput,
+  AdminReviewResponse,
 } from './types'
 
-/** منبع داده‌ای که این لایه فعلاً استفاده می‌کند — برای نمایش صریح در UI */
-export const ADMIN_DATA_SOURCE = 'mock' as const
+/** GET /api/admin/dashboard — شمارش شکایات به تفکیک وضعیت */
+export async function fetchAdminDashboard(signal?: AbortSignal): Promise<AdminDashboardResponse> {
+  return apiRequest<AdminDashboardResponse>(endpoints.adminDashboard(), { signal })
+}
 
-export const adminApi = {
-  // ---- داشبورد ----
-  overview: (): Promise<AdminOverview> => adminMock.overview(),
+/**
+ * GET /api/admin/complaints[?status=…]
+ * بک‌اند فقط pending|reviewing|resolved|rejected را می‌پذیرد؛ بدون پارامتر یعنی «همه».
+ */
+export async function fetchAdminComplaints(
+  params: { status?: ComplaintStatus | 'all'; page?: number } = {},
+  signal?: AbortSignal,
+): Promise<AdminComplaintList> {
+  const query = new URLSearchParams()
+  if (params.status && params.status !== 'all') query.set('status', params.status)
+  query.set('page', String(params.page ?? 1))
 
-  // ---- کاربران ----
-  users: (params: {
-    page?: number
-    search?: string
-    active?: 'all' | 'active' | 'inactive'
-  }): Promise<AdminPaginated<AdminUserRow>> => adminMock.users(params),
+  const data = await apiRequest<{ complaints: AdminComplaintList }>(
+    `${endpoints.adminComplaints()}?${query.toString()}`,
+    { signal },
+  )
+  return data.complaints
+}
 
-  user: (userId: number): Promise<AdminUserDetail> => adminMock.user(userId),
+/** GET /api/admin/complaints/{complaint} — پروندهٔ کامل شکایت */
+export async function fetchAdminComplaint(
+  complaintId: number | string,
+  signal?: AbortSignal,
+): Promise<AdminComplaintDetailResponse> {
+  return apiRequest<AdminComplaintDetailResponse>(endpoints.adminComplaint(complaintId), { signal })
+}
 
-  setUserStatus: (userId: number, isActive: boolean): Promise<AdminUserDetail> =>
-    adminMock.setUserStatus(userId, isActive),
+/**
+ * PATCH /api/admin/complaints/{complaint}/review
+ * فقط وقتی شکایت `pending` و پروژه `disputed` است موفق می‌شود؛ در غیر این صورت ۴۲۲.
+ */
+export async function startAdminComplaintReview(
+  complaintId: number | string,
+): Promise<AdminReviewResponse> {
+  return apiRequest<AdminReviewResponse>(endpoints.adminComplaintReview(complaintId), {
+    method: 'PATCH',
+  })
+}
 
-  // ---- تسک‌ها ----
-  tasks: (params: {
-    page?: number
-    search?: string
-    status?: string
-    categoryId?: number | 'all'
-  }): Promise<AdminPaginated<AdminTaskRow>> => adminMock.tasks(params),
-
-  task: (taskId: number): Promise<AdminTaskDetail> => adminMock.task(taskId),
-
-  cancelTask: (taskId: number): Promise<AdminTaskDetail> => adminMock.cancelTask(taskId),
-
-  // ---- درخواست‌های همکاری ----
-  applications: (params: {
-    page?: number
-    status?: string
-    search?: string
-  }): Promise<AdminPaginated<AdminApplicationRow>> => adminMock.applications(params),
-
-  application: (applicationId: number): Promise<AdminApplicationDetail> =>
-    adminMock.application(applicationId),
-
-  // ---- پروژه‌ها ----
-  projects: (params: {
-    page?: number
-    status?: string
-    paymentStatus?: string
-    search?: string
-  }): Promise<AdminPaginated<AdminProjectRow>> => adminMock.projects(params),
-
-  project: (projectId: number): Promise<AdminProjectDetail> => adminMock.project(projectId),
-
-  projectDeliveries: (projectId: number): Promise<AdminDeliveryRow[]> =>
-    adminMock.projectDeliveries(projectId),
-
-  // ---- شکایات (اولویت اول) ----
-  complaints: (params: {
-    page?: number
-    status?: string
-    search?: string
-    from?: string
-    to?: string
-  }): Promise<AdminPaginated<AdminComplaintRow>> => adminMock.complaints(params),
-
-  complaint: (complaintId: number): Promise<AdminComplaintDetail> =>
-    adminMock.complaint(complaintId),
-
-  startComplaintReview: (complaintId: number): Promise<AdminComplaintDetail> =>
-    adminMock.startComplaintReview(complaintId),
-
-  decideComplaint: (
-    complaintId: number,
-    input: AdminComplaintDecisionInput,
-  ): Promise<AdminComplaintDetail> => adminMock.decideComplaint(complaintId, input),
-
-  // ---- ارزیابی‌ها ----
-  reviews: (params: {
-    page?: number
-    satisfied?: 'all' | 'yes' | 'no'
-    search?: string
-  }): Promise<AdminPaginated<AdminReviewRow>> => adminMock.reviews(params),
-
-  // ---- دسته‌بندی‌ها ----
-  categories: (): Promise<AdminCategoryRow[]> => adminMock.categories(),
-  createCategory: (name: string, slug: string): Promise<AdminCategoryRow> =>
-    adminMock.createCategory(name, slug),
-  updateCategory: (id: number, name: string, slug: string): Promise<AdminCategoryRow> =>
-    adminMock.updateCategory(id, name, slug),
-  deleteCategory: (id: number): Promise<{ ok: true }> => adminMock.deleteCategory(id),
-
-  // ---- مهارت‌ها ----
-  skills: (): Promise<AdminSkillRow[]> => adminMock.skills(),
-  createSkill: (name: string): Promise<AdminSkillRow> => adminMock.createSkill(name),
-  updateSkill: (id: number, name: string): Promise<AdminSkillRow> =>
-    adminMock.updateSkill(id, name),
-  deleteSkill: (id: number): Promise<{ ok: true }> => adminMock.deleteSkill(id),
+/**
+ * PATCH /api/admin/complaints/{complaint}/resolve
+ * فقط وقتی شکایت `reviewing` است. پاسخ فقط پیام دارد، پس بعد از موفقیت باید
+ * پروندهٔ شکایت دوباره خوانده شود تا وضعیت جدید شکایت و پروژه دیده شود.
+ */
+export async function resolveAdminComplaint(
+  complaintId: number | string,
+  input: AdminResolveInput,
+): Promise<{ message: string }> {
+  return apiRequest<{ message: string }>(endpoints.adminComplaintResolve(complaintId), {
+    method: 'PATCH',
+    json: input,
+  })
 }
