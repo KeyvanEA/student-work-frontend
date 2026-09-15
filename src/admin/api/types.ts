@@ -2,19 +2,25 @@
  * مدل‌های پنل ادمین — دقیقاً مطابق خروجی کنترلرهای بک‌اند:
  *   app/Http/Controllers/Admin/AdminDashboardController.php
  *   app/Http/Controllers/Admin/AdminComplaintController.php
+ *   app/Http/Controllers/Admin/AdminUserController.php
+ *   app/Http/Controllers/Admin/AdminTaskController.php
  *
  * ⚠️ هیچ فیلدی اینجا اضافه نشده که بک‌اند برنگرداند.
  */
 
 import type {
   Application,
+  Category,
   ComplaintStatus,
   DeliveryStatus,
   Paginated,
   PaymentStatus,
   Project,
   ProjectStatus,
+  Skill,
   Task,
+  TaskFile,
+  TaskStatus,
   User,
 } from '@/types/models'
 
@@ -137,3 +143,90 @@ export type AdminValidAction = 'revision' | 'cancel'
 export type AdminResolveInput =
   | { decision: 'invalid'; admin_response: string }
   | { decision: 'valid'; action: AdminValidAction; admin_response: string }
+
+/* -------------------------------------------------------------------------
+ * مدیریت کاربران — app/Http/Controllers/Admin/AdminUserController.php
+ * ---------------------------------------------------------------------- */
+
+/**
+ * آیتم فهرست GET /api/admin/users[?mobile=…]
+ * select: id, full_name, mobile, student_number, is_active, created_at
+ * with: roles(id,name) — نقش‌های spatie، برای تشخیص حساب‌های ادمین
+ */
+export interface AdminUserListItem {
+  id: number
+  full_name: string
+  mobile: string
+  student_number: string
+  is_active: boolean
+  created_at: string
+  roles: Array<{ id: number; name: string }>
+}
+
+export type AdminUserList = Paginated<AdminUserListItem>
+
+/**
+ * پاسخ DELETE /api/admin/users/{user}
+ *
+ * همه کلیدهای خارجی به users به‌صورت cascade هستند، بنابراین بک‌اند کاربری را که
+ * سابقهٔ پروژه دارد حذف فیزیکی نمی‌کند و فقط غیرفعالش می‌کند. `strategy` می‌گوید
+ * کدام اتفاق افتاده است.
+ */
+export type AdminUserDeleteStrategy = 'deleted' | 'deactivated'
+
+export interface AdminUserDeleteResponse {
+  message: string
+  strategy: AdminUserDeleteStrategy
+  user?: { id: number; is_active: boolean }
+}
+
+/* -------------------------------------------------------------------------
+ * مدیریت و تایید تسک‌ها — app/Http/Controllers/Admin/AdminTaskController.php
+ * ---------------------------------------------------------------------- */
+
+/** مقادیری که AdminTaskController::index در query param `status` می‌پذیرد */
+export type AdminTaskFilter = 'pending' | 'open' | 'rejected' | 'all'
+
+/**
+ * آیتم فهرست GET /api/admin/tasks[?status=…]
+ * select: id, user_id, category_id, title, budget, deadline, status, created_at
+ * with: user(id,full_name) · category(id,name)
+ */
+export interface AdminTaskListItem {
+  id: number
+  user_id: number
+  category_id: number
+  title: string
+  budget: number
+  deadline: string
+  status: TaskStatus
+  created_at: string
+  user?: Pick<User, 'id' | 'full_name'>
+  category?: Pick<Category, 'id' | 'name'>
+}
+
+export type AdminTaskList = Paginated<AdminTaskListItem>
+
+/**
+ * پاسخ GET /api/admin/tasks/{task} — مدل کامل تسک به همراه کارفرما، دسته‌بندی،
+ * مهارت‌ها و فایل‌ها. فایل‌ها همان download_url همیشگی بک‌اند را دارند.
+ */
+export interface AdminTaskDetail extends Task {
+  user?: Pick<
+    User,
+    'id' | 'full_name' | 'avatar' | 'mobile' | 'student_number' | 'field_of_study' | 'university_name'
+  >
+  category?: Pick<Category, 'id' | 'name'>
+  skills?: Skill[]
+  files?: TaskFile[]
+}
+
+export interface AdminTaskDetailResponse {
+  task: AdminTaskDetail
+}
+
+/** پاسخ PATCH /api/admin/tasks/{task}/approve و …/reject */
+export interface AdminTaskActionResponse {
+  message: string
+  task: { id: number; status: TaskStatus }
+}

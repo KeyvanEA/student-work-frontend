@@ -117,9 +117,24 @@ export default function TaskDetailPage() {
       </div>
 
       {!isOpen ? (
-        <Alert tone={data.status === 'cancelled' ? 'danger' : 'info'}>
+        <Alert
+          tone={
+            data.status === 'cancelled' || data.status === 'rejected'
+              ? 'danger'
+              : data.status === 'pending'
+                ? 'warning'
+                : 'info'
+          }
+        >
           {metaOf(taskStatusMeta, data.status).hint ??
             'این تسک دیگر پذیرای درخواست همکاری جدید نیست.'}
+        </Alert>
+      ) : null}
+
+      {/* دلیل رد شدن فقط برای صاحب تسک معنا دارد؛ بک‌اند هم تسک ردشده را به بقیه نمی‌دهد */}
+      {isOwner && data.status === 'rejected' && data.rejection_reason ? (
+        <Alert tone="danger" title="دلیل ادمین برای منتشر نشدن تسک">
+          <span className="whitespace-pre-line leading-8">{data.rejection_reason}</span>
         </Alert>
       ) : null}
 

@@ -23,9 +23,15 @@ export async function fetchMyTasks(
   return data.tasks
 }
 
-/** GET /api/tasks/{id} — عمومی */
+/**
+ * GET /api/tasks/{id} — مسیر عمومی است و مهمان هم می‌تواند بازش کند.
+ *
+ * ⚠️ توکن عمداً ارسال می‌شود (auth: false نیست): بعد از افزوده‌شدن تایید ادمین، تسک
+ * `pending` یا `rejected` برای بقیه ۴۰۴ است و بک‌اند فقط با همین توکن می‌فهمد
+ * درخواست‌دهنده صاحب تسک (یا ادمین) است و باید تسک خودش را ببیند.
+ */
 export async function fetchTask(taskId: number | string, signal?: AbortSignal): Promise<Task> {
-  const data = await apiRequest<{ task: Task }>(endpoints.task(taskId), { signal, auth: false })
+  const data = await apiRequest<{ task: Task }>(endpoints.task(taskId), { signal })
   return data.task
 }
 

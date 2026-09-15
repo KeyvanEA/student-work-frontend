@@ -6,7 +6,19 @@
  * هماهنگ شود؛ نه با چیزی که «باید» باشد.
  */
 
-export type TaskStatus = 'open' | 'assigned' | 'completed' | 'cancelled' | 'expired'
+/**
+ * وضعیت تسک.
+ * `pending` و `rejected` با مهاجرت add_moderation_status_to_tasks_table اضافه شده‌اند:
+ * تسک تازه در انتظار بررسی ادمین است و فقط بعد از تایید به `open` می‌رسد.
+ */
+export type TaskStatus =
+  | 'pending'
+  | 'open'
+  | 'assigned'
+  | 'completed'
+  | 'cancelled'
+  | 'expired'
+  | 'rejected'
 export type ApplicationStatus = 'pending' | 'contacted' | 'accepted' | 'rejected'
 export type ProjectStatus =
   | 'in_progress'
@@ -99,6 +111,8 @@ export interface Task {
   budget: number
   deadline: string
   status: TaskStatus
+  /** فقط وقتی ادمین تسک را رد کرده باشد پر است */
+  rejection_reason: string | null
   created_at: string
   updated_at: string
   user?: Pick<User, 'id' | 'full_name' | 'avatar'>

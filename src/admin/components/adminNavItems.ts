@@ -25,13 +25,14 @@ export interface AdminNavItem {
 /**
  * ناوبری پنل ادمین.
  *
- * فقط «داشبورد» و «مدیریت شکایات» واقعاً کار می‌کنند؛ بقیه عمداً غیرفعال‌اند چون
- * بک‌اند برایشان API ندارد و طبق نیازمندی نباید Mock یا صفحهٔ ساختگی ساخته شود.
+ * «داشبورد»، «مدیریت کاربران»، «مدیریت تسک‌ها» و «مدیریت شکایات» واقعاً کار می‌کنند؛
+ * بقیه عمداً غیرفعال‌اند چون بک‌اند برایشان API ندارد و طبق نیازمندی نباید Mock یا
+ * صفحهٔ ساختگی ساخته شود.
  */
 export const adminNav: AdminNavItem[] = [
   { key: 'dashboard', label: 'داشبورد', Icon: IconGrid, to: '/admin', end: true },
-  { key: 'users', label: 'مدیریت کاربران', Icon: IconUsers },
-  { key: 'tasks', label: 'مدیریت تسک‌ها', Icon: IconTasks },
+  { key: 'users', label: 'مدیریت کاربران', Icon: IconUsers, to: '/admin/users' },
+  { key: 'tasks', label: 'مدیریت تسک‌ها', Icon: IconTasks, to: '/admin/tasks' },
   { key: 'applications', label: 'مدیریت درخواست‌های همکاری', Icon: IconHandshake },
   { key: 'projects', label: 'مدیریت پروژه‌ها', Icon: IconPackage },
   { key: 'complaints', label: 'مدیریت شکایات', Icon: IconWarning, to: '/admin/complaints' },

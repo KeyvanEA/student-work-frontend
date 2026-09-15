@@ -16,11 +16,21 @@ export interface StatusMeta {
 }
 
 export const taskStatusMeta: Record<TaskStatus, StatusMeta> = {
+  pending: {
+    label: 'در انتظار تایید ادمین',
+    tone: 'warning',
+    hint: 'تا تایید ادمین منتشر نمی‌شود و برای بقیه کاربران دیده نمی‌شود',
+  },
   open: { label: 'باز', tone: 'success', hint: 'در حال دریافت درخواست همکاری' },
   assigned: { label: 'واگذار شده', tone: 'info', hint: 'یک درخواست پذیرفته و پروژه ساخته شده' },
   completed: { label: 'تکمیل شده', tone: 'brand' },
   cancelled: { label: 'لغو شده', tone: 'danger' },
   expired: { label: 'منقضی شده', tone: 'neutral' },
+  rejected: {
+    label: 'ردشده توسط ادمین',
+    tone: 'danger',
+    hint: 'ادمین این تسک را بررسی کرد و منتشر نشد',
+  },
 }
 
 export const applicationStatusMeta: Record<ApplicationStatus, StatusMeta> = {
