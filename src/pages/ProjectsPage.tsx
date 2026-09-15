@@ -54,10 +54,21 @@ function isRole(value: string | undefined): value is ProjectRole {
 /** فهرست پروژه‌ها — GET /api/projects?role=…&status=… */
 export default function ProjectsPage() {
   const { status, role } = useParams()
-  const [page, setPage] = useState(1)
 
   const validStatus = isStatus(status) ? status : null
   const validRole = isRole(role) ? role : null
+
+  /**
+   * شمارهٔ صفحه به ترکیب وضعیت/نقش گره خورده است. مسیرهای /projects/:status/:role همگی
+   * همین کامپوننت را رندر می‌کنند و با تعویض تب دوباره mount نمی‌شود؛ بدون این گره
+   * شمارهٔ صفحهٔ تب قبلی می‌ماند و تب جدید ممکن است خالی باز شود.
+   */
+  const tabKey = `${validStatus ?? ''}/${validRole ?? ''}`
+  const [pageState, setPageState] = useState<{ tab: string; page: number }>({
+    tab: tabKey,
+    page: 1,
+  })
+  const page = pageState.tab === tabKey ? pageState.page : 1
 
   const loader = useCallback(
     (signal: AbortSignal) =>
@@ -143,7 +154,7 @@ export default function ProjectsPage() {
               total={projects.data.total}
               disabled={projects.refreshing}
               onChange={(next) => {
-                setPage(next)
+                setPageState({ tab: tabKey, page: next })
                 window.scrollTo({ top: 0, behavior: 'smooth' })
               }}
             />

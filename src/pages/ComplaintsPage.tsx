@@ -36,7 +36,15 @@ const DESCRIPTION: Record<Scope, string> = {
  * دامنه به‌صورت prop می‌آید تا مسیرهای ثابت با /complaints/:complaintId تداخل نکنند.
  */
 export default function ComplaintsPage({ scope: validScope }: { scope: ComplaintScope }) {
-  const [page, setPage] = useState(1)
+  /**
+   * شمارهٔ صفحه به دامنهٔ جاری گره خورده است؛ این کامپوننت بین /complaints/mine و
+   * /complaints/related دوباره mount نمی‌شود و بدون این گره شمارهٔ صفحه از تب قبلی می‌ماند.
+   */
+  const [pageState, setPageState] = useState<{ scope: ComplaintScope; page: number }>({
+    scope: validScope,
+    page: 1,
+  })
+  const page = pageState.scope === validScope ? pageState.page : 1
 
   const loader = useCallback(
     (signal: AbortSignal) =>
@@ -144,7 +152,7 @@ export default function ComplaintsPage({ scope: validScope }: { scope: Complaint
               total={complaints.data.total}
               disabled={complaints.refreshing}
               onChange={(next) => {
-                setPage(next)
+                setPageState({ scope: validScope, page: next })
                 window.scrollTo({ top: 0, behavior: 'smooth' })
               }}
             />

@@ -30,7 +30,16 @@ const DESCRIPTION: Record<ApplicationListType, string> = {
  * نوع فهرست به‌صورت prop می‌آید تا مسیرهای ثابت با /applications/:applicationId تداخل نکنند.
  */
 export default function ApplicationsPage({ type: validType }: { type: ApplicationListType }) {
-  const [page, setPage] = useState(1)
+  /**
+   * شمارهٔ صفحه به نوع فهرست گره خورده است. این کامپوننت بین /applications/sent و
+   * /applications/received دوباره mount نمی‌شود، پس بدون این گره شمارهٔ صفحهٔ تب قبلی
+   * باقی می‌ماند و تب جدید با صفحه‌ای خالی باز می‌شود.
+   */
+  const [pageState, setPageState] = useState<{ type: ApplicationListType; page: number }>({
+    type: validType,
+    page: 1,
+  })
+  const page = pageState.type === validType ? pageState.page : 1
 
   const loader = useCallback(
     (signal: AbortSignal) => fetchApplications(validType, page, signal),
@@ -96,7 +105,7 @@ export default function ApplicationsPage({ type: validType }: { type: Applicatio
               total={applications.data.total}
               disabled={applications.refreshing}
               onChange={(next) => {
-                setPage(next)
+                setPageState({ type: validType, page: next })
                 window.scrollTo({ top: 0, behavior: 'smooth' })
               }}
             />

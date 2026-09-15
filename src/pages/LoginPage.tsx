@@ -8,6 +8,7 @@ import { Card, CardBody } from '@/components/ui/Card'
 import { ErrorState } from '@/components/ui/ErrorState'
 import { Field } from '@/components/ui/Field'
 import { Input } from '@/components/ui/Input'
+import { Spinner } from '@/components/ui/Spinner'
 import { useToast } from '@/components/ui/Toast'
 import { useDocumentTitle } from '@/hooks/useDocumentTitle'
 import { useMutation } from '@/hooks/useMutation'
@@ -15,6 +16,20 @@ import { toEnglishDigits } from '@/lib/format'
 
 /** همان الگویی که LoginRequest بک‌اند اعتبارسنجی می‌کند: regex:/^09[0-9]{9}$/ */
 const MOBILE_PATTERN = /^09\d{9}$/
+
+/**
+ * مقصد بعد از ورود — تنها جایی که این تصمیم گرفته می‌شود.
+ *
+ * ادمین مستقیماً وارد /admin می‌شود و هیچ‌وقت از داشبورد کاربر عبور نمی‌کند؛
+ * فقط اگر پیش از ورود در حال رفتن به مسیری داخل خود پنل بوده، همان مسیر حفظ می‌شود.
+ * برعکس، کاربر عادی که به /admin هدایت شده بود به داشبورد خودش می‌رود تا در
+ * صفحهٔ «دسترسی ندارید» گیر نکند.
+ */
+function destinationAfterLogin(isAdmin: boolean, from?: string): string {
+  if (isAdmin) return from?.startsWith('/admin') ? from : '/admin'
+  if (!from || from.startsWith('/admin')) return '/dashboard'
+  return from
+}
 
 /**
  * ورود.
@@ -30,24 +45,40 @@ export default function LoginPage() {
   const location = useLocation()
   const toast = useToast()
   const { login, status } = useAuth()
-  const { ensureChecked } = useAdminAccess()
+  const { isAdmin, resolved: roleResolved, ensureChecked } = useAdminAccess()
 
   const [mobile, setMobile] = useState('')
   const [localError, setLocalError] = useState<string | null>(null)
 
   const from = (location.state as { from?: string } | null)?.from
-  const redirectTo = from ?? '/dashboard'
 
   const loginMutation = useMutation(async (value: string) => login(value), {
     onSuccess: async (user) => {
       toast.success(`خوش آمدید، ${user.full_name}`)
-      // ادمین بعد از ورود مستقیم وارد پنل می‌شود، مگر اینکه از مسیر مشخصی آمده باشد.
-      const isAdmin = await ensureChecked(user)
-      navigate(from ?? (isAdmin ? '/admin' : '/dashboard'), { replace: true })
+      // نقش پیش از هر ناوبری قطعی می‌شود تا ادمین از مسیر داشبورد کاربر رد نشود.
+      const admin = await ensureChecked(user)
+      navigate(destinationAfterLogin(admin, from), { replace: true })
     },
   })
 
-  if (status === 'authenticated') return <Navigate to={redirectTo} replace />
+  /**
+   * تا وقتی نشست یا نقش کاربر قطعی نشده هیچ تصمیم مسیریابی گرفته نمی‌شود.
+   * `loginMutation.loading` تا پایان onSuccess (یعنی تا انجام ناوبری) true می‌ماند،
+   * بنابراین در فاصلهٔ «توکن گرفته شد» تا «نقش مشخص شد» هیچ redirect زودهنگامی
+   * به /dashboard رخ نمی‌دهد. مشکل قبلی دقیقاً همین بود: login → /dashboard → /admin
+   */
+  if (status === 'loading' || (status === 'authenticated' && !roleResolved)) {
+    return (
+      <div className="flex min-h-dvh flex-col items-center justify-center gap-3 text-ink-400">
+        <Spinner size={28} className="text-brand-500" />
+        <p className="text-[13px] font-medium">در حال بررسی نشست شما…</p>
+      </div>
+    )
+  }
+
+  if (status === 'authenticated' && !loginMutation.loading) {
+    return <Navigate to={destinationAfterLogin(isAdmin, from)} replace />
+  }
 
   const normalizedMobile = toEnglishDigits(mobile).replace(/\s|-/g, '')
 

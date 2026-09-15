@@ -18,7 +18,7 @@ import type { User } from '@/types/models'
  *
  * ورود ادمین همان ورود عادی پروژه است و هیچ صفحه یا endpoint جداگانه‌ای ندارد.
  * امنیت واقعی سمت بک‌اند است (middleware `admin` روی مسیرهای /api/admin/*)؛
- * اینجا فقط UI بر اساس نقش کنترل می‌شود.
+ * اینجا فقط UI و مسیریابی بر اساس نقش کنترل می‌شود.
  *
  * چطور نقش را می‌فهمیم؟
  *  ۱) اگر پاسخ کاربر رابطهٔ `roles` را داشت، از همان خوانده می‌شود (بدون درخواست اضافه).
@@ -27,6 +27,10 @@ import type { User } from '@/types/models'
  *     ۴۰۳ یعنی کاربر عادی. این همان endpoint واقعی بک‌اند است و چیزی اختراع نمی‌شود.
  *
  * نتیجه برای هر کاربر در همان نشست cache می‌شود تا این بررسی تکرار نشود.
+ *
+ * بررسی به‌محض شناخته‌شدن کاربر و بدون انتظار برای ورود به مسیر /admin انجام می‌شود،
+ * تا تصمیم‌های مسیریابی (ورود و رفرش صفحه) هرگز مجبور نشوند نقش را حدس بزنند و
+ * داشبورد اشتباه حتی برای یک لحظه رندر نشود.
  */
 
 export type AdminAccessStatus = 'idle' | 'checking' | 'admin' | 'denied' | 'error'
@@ -34,6 +38,12 @@ export type AdminAccessStatus = 'idle' | 'checking' | 'admin' | 'denied' | 'erro
 interface AdminAccessValue {
   status: AdminAccessStatus
   isAdmin: boolean
+  /**
+   * نقش کاربر جاری قطعی شده است؟
+   * تا وقتی این false است هیچ redirect وابسته به نقش نباید انجام شود.
+   * برای کاربر مهمان هم true است، چون «ادمین نبودن» او قطعی است.
+   */
+  resolved: boolean
   /**
    * بررسی دسترسی (در صورت لازم) و برگرداندن نتیجه.
    *
@@ -78,76 +88,81 @@ export function AdminAccessProvider({ children }: { children: ReactNode }) {
   /** جلوگیری از چند بررسی هم‌زمان وقتی چند کامپوننت با هم درخواست می‌دهند */
   const inFlight = useRef<Promise<boolean> | null>(null)
 
-  // با تغییر کاربر (ورود/خروج) وضعیت از نو ارزیابی می‌شود
-  useEffect(() => {
-    inFlight.current = null
+  /**
+   * کاربر جاری برای `ensureChecked()` بدون آرگومان.
+   * از ref خوانده می‌شود تا هویت `ensureChecked` ثابت بماند و effectهای مصرف‌کننده
+   * با هر رندر دوباره اجرا نشوند.
+   */
+  const currentUser = useRef<User | null>(null)
+  currentUser.current = isAuthenticated ? user : null
 
+  const resolveFor = useCallback(async (target: User | null): Promise<boolean> => {
+    if (!target) return false
+
+    const fromRole = roleFromUser(target)
+    if (fromRole !== null) {
+      writeCache(target.id, fromRole)
+      setStatus(fromRole ? 'admin' : 'denied')
+      return fromRole
+    }
+
+    const cached = readCache(target.id)
+    if (cached !== null) {
+      setStatus(cached ? 'admin' : 'denied')
+      return cached
+    }
+
+    if (inFlight.current) return inFlight.current
+
+    setStatus('checking')
+    const request = fetchAdminDashboard()
+      .then(() => {
+        writeCache(target.id, true)
+        setStatus('admin')
+        return true
+      })
+      .catch((error: unknown) => {
+        // ۴۰۳ یعنی کاربر عادی — یک پاسخ معتبر، نه خطای غیرمنتظره
+        if (error instanceof ApiError && error.status === 403) {
+          writeCache(target.id, false)
+          setStatus('denied')
+          return false
+        }
+        setStatus('error')
+        return false
+      })
+      .finally(() => {
+        inFlight.current = null
+      })
+
+    inFlight.current = request
+    return request
+  }, [])
+
+  const ensureChecked = useCallback(
+    (forUser?: User | null) => resolveFor(forUser ?? currentUser.current),
+    [resolveFor],
+  )
+
+  // با مشخص شدن کاربر (ورود یا بازیابی نشست) نقش بلافاصله تعیین می‌شود؛ با خروج پاک می‌شود.
+  useEffect(() => {
     if (!isAuthenticated || !user) {
+      inFlight.current = null
       setStatus('idle')
       return
     }
-
-    const fromRole = roleFromUser(user)
-    if (fromRole !== null) {
-      writeCache(user.id, fromRole)
-      setStatus(fromRole ? 'admin' : 'denied')
-      return
-    }
-
-    const cached = readCache(user.id)
-    setStatus(cached === null ? 'idle' : cached ? 'admin' : 'denied')
-  }, [isAuthenticated, user])
-
-  const ensureChecked = useCallback(
-    async (forUser?: User | null): Promise<boolean> => {
-      const target = forUser ?? user
-      if (!target || (!forUser && !isAuthenticated)) return false
-
-      const fromRole = roleFromUser(target)
-      if (fromRole !== null) {
-        writeCache(target.id, fromRole)
-        setStatus(fromRole ? 'admin' : 'denied')
-        return fromRole
-      }
-
-      const cached = readCache(target.id)
-      if (cached !== null) {
-        setStatus(cached ? 'admin' : 'denied')
-        return cached
-      }
-
-      if (inFlight.current) return inFlight.current
-
-      setStatus('checking')
-      const request = fetchAdminDashboard()
-        .then(() => {
-          writeCache(target.id, true)
-          setStatus('admin')
-          return true
-        })
-        .catch((error: unknown) => {
-          // ۴۰۳ یعنی کاربر عادی — یک پاسخ معتبر، نه خطای غیرمنتظره
-          if (error instanceof ApiError && error.status === 403) {
-            writeCache(target.id, false)
-            setStatus('denied')
-            return false
-          }
-          setStatus('error')
-          return false
-        })
-        .finally(() => {
-          inFlight.current = null
-        })
-
-      inFlight.current = request
-      return request
-    },
-    [isAuthenticated, user],
-  )
+    void resolveFor(user)
+  }, [isAuthenticated, user, resolveFor])
 
   const value = useMemo<AdminAccessValue>(
-    () => ({ status, isAdmin: status === 'admin', ensureChecked }),
-    [status, ensureChecked],
+    () => ({
+      status,
+      isAdmin: status === 'admin',
+      // وقتی کاربری وارد نشده، «ادمین نبودن» قطعی است؛ 'error' هم نتیجهٔ نهایی این نشست است.
+      resolved: !isAuthenticated || status === 'admin' || status === 'denied' || status === 'error',
+      ensureChecked,
+    }),
+    [status, isAuthenticated, ensureChecked],
   )
 
   return <AdminAccessContext.Provider value={value}>{children}</AdminAccessContext.Provider>

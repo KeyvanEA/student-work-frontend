@@ -23,20 +23,30 @@ export function Modal({
 }) {
   const panelRef = useRef<HTMLDivElement>(null)
 
+  /**
+   * `onClose` تقریباً همیشه یک تابع inline است و با هر رندر والد هویت تازه می‌گیرد.
+   * اگر مستقیماً در وابستگی‌های effect بیاید، هر تایپ داخل مودال باعث اجرای دوبارهٔ
+   * effect و در نتیجه focus() روی پنل می‌شود و فوکوس از input/textarea پریده می‌شود.
+   * پس آخرین نسخهٔ آن در ref نگه داشته می‌شود و effect فقط به `open` وابسته است.
+   */
+  const onCloseRef = useRef(onClose)
+  onCloseRef.current = onClose
+
   useEffect(() => {
     if (!open) return
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose()
+      if (event.key === 'Escape') onCloseRef.current()
     }
     document.addEventListener('keydown', onKeyDown)
     const previousOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
+    // فقط در لحظهٔ باز شدن مودال — نه در هر رندر
     panelRef.current?.focus()
     return () => {
       document.removeEventListener('keydown', onKeyDown)
       document.body.style.overflow = previousOverflow
     }
-  }, [open, onClose])
+  }, [open])
 
   if (!open) return null
 
