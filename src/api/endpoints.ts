@@ -3,7 +3,7 @@
  * هر مسیر اینجا دقیقاً معادل یک route ثبت‌شده در routes/api.php بک‌اند است.
  * ⚠️ هیچ endpoint خیالی اینجا اضافه نشود.
  *
- * آخرین sync با routes/api.php (commit 7826987).
+ * آخرین sync با routes/api.php (شاخهٔ feature/admin-user-task-moderation).
  */
 
 export const API_PREFIX = '/api'
@@ -74,4 +74,10 @@ export const endpoints = {
     `${API_PREFIX}/admin/complaints/${complaintId}/review`,
   adminComplaintResolve: (complaintId: number | string) =>
     `${API_PREFIX}/admin/complaints/${complaintId}/resolve`,
+  adminUsers: () => `${API_PREFIX}/admin/users`,
+  adminUser: (userId: number | string) => `${API_PREFIX}/admin/users/${userId}`,
+  adminTasks: () => `${API_PREFIX}/admin/tasks`,
+  adminTask: (taskId: number | string) => `${API_PREFIX}/admin/tasks/${taskId}`,
+  adminTaskApprove: (taskId: number | string) => `${API_PREFIX}/admin/tasks/${taskId}/approve`,
+  adminTaskReject: (taskId: number | string) => `${API_PREFIX}/admin/tasks/${taskId}/reject`,
 } as const

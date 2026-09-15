@@ -38,6 +38,9 @@ const AdminLayout = lazy(() =>
   import('@/admin/components/AdminLayout').then((m) => ({ default: m.AdminLayout })),
 )
 const AdminDashboardPage = lazy(() => import('@/admin/pages/AdminDashboardPage'))
+const AdminUsersPage = lazy(() => import('@/admin/pages/AdminUsersPage'))
+const AdminTasksPage = lazy(() => import('@/admin/pages/AdminTasksPage'))
+const AdminTaskDetailPage = lazy(() => import('@/admin/pages/AdminTaskDetailPage'))
 const AdminComplaintsPage = lazy(() => import('@/admin/pages/AdminComplaintsPage'))
 const AdminComplaintDetailPage = lazy(() => import('@/admin/pages/AdminComplaintDetailPage'))
 
@@ -133,7 +136,7 @@ export const router = createBrowserRouter([
         ],
       },
 
-      // ---------- پنل ادمین (فقط داشبورد و شکایات فعال‌اند) ----------
+      // ---------- پنل ادمین (داشبورد، کاربران، تسک‌ها و شکایات فعال‌اند) ----------
       {
         path: 'admin',
         element: (
@@ -149,6 +152,30 @@ export const router = createBrowserRouter([
             element: (
               <AdminChunk>
                 <AdminDashboardPage />
+              </AdminChunk>
+            ),
+          },
+          {
+            path: 'users',
+            element: (
+              <AdminChunk>
+                <AdminUsersPage />
+              </AdminChunk>
+            ),
+          },
+          {
+            path: 'tasks',
+            element: (
+              <AdminChunk>
+                <AdminTasksPage />
+              </AdminChunk>
+            ),
+          },
+          {
+            path: 'tasks/:taskId',
+            element: (
+              <AdminChunk>
+                <AdminTaskDetailPage />
               </AdminChunk>
             ),
           },
