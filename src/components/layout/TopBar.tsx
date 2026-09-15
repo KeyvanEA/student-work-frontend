@@ -83,7 +83,7 @@ export function TopBar() {
             </Link>
             {isAuthenticated && user ? (
               <Link to="/profile" aria-label="پروفایل من" className="ms-0.5">
-                <Avatar name={user.full_name} size="sm" />
+                <Avatar name={user.full_name} src={user.avatar} size="sm" />
               </Link>
             ) : (
               <Link

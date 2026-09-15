@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { acceptApplication, fetchTaskApplications, rejectApplication } from '@/api/applications'
 import { fetchTask } from '@/api/tasks'
 import { ApplicationCard } from '@/components/domain/ApplicationCard'
+import { UserProfileDialog, type ProfilePeek } from '@/components/domain/UserProfileDialog'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Alert } from '@/components/ui/Alert'
 import { Button } from '@/components/ui/Button'
@@ -25,6 +26,7 @@ export default function TaskApplicationsPage() {
   const toast = useToast()
 
   const [page, setPage] = useState(1)
+  const [peek, setPeek] = useState<ProfilePeek | null>(null)
   const [target, setTarget] = useState<{ application: Application; action: 'accept' | 'reject' } | null>(
     null,
   )
@@ -111,6 +113,13 @@ export default function TaskApplicationsPage() {
                 application={application}
                 busy={busy}
                 onOpen={() => navigate(`/applications/${application.id}`)}
+                onOpenProfile={() =>
+                  setPeek(
+                    application.user
+                      ? { ...application.user, id: application.user.id ?? application.user_id }
+                      : { id: application.user_id },
+                  )
+                }
                 onAccept={
                   application.status === 'pending'
                     ? () => setTarget({ application, action: 'accept' })
@@ -175,6 +184,17 @@ export default function TaskApplicationsPage() {
           پذیرش یا رد درخواست جدید امکان‌پذیر نیست.
         </Alert>
       ) : null}
+      {/*
+        پروفایل متقاضی — ApplicationController::index برای صاحب تسک
+        user:id,full_name,mobile,avatar را برمی‌گرداند.
+      */}
+      <UserProfileDialog
+        open={peek !== null}
+        onClose={() => setPeek(null)}
+        user={peek}
+        title="پروفایل متقاضی"
+      />
+
     </div>
   )
 }

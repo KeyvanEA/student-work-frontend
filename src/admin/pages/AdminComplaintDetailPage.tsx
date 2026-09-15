@@ -7,14 +7,16 @@ import {
 } from '@/admin/api/adminApi'
 import { DetailList, DetailRow } from '@/components/domain/DetailList'
 import { StatusBadge } from '@/components/domain/StatusBadge'
+import { StoredFileList } from '@/components/domain/StoredFileRow'
+import { UserProfileDialog, type ProfilePeek } from '@/components/domain/UserProfileDialog'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Alert } from '@/components/ui/Alert'
 import { Avatar } from '@/components/ui/Avatar'
-import { Button } from '@/components/ui/Button'
+import { Button, LinkButton } from '@/components/ui/Button'
 import { Card, CardBody, CardHeader } from '@/components/ui/Card'
 import { ErrorState } from '@/components/ui/ErrorState'
 import { Field } from '@/components/ui/Field'
-import { IconClock, IconFile, IconMoney } from '@/components/ui/Icons'
+import { IconClock, IconMoney, IconUser } from '@/components/ui/Icons'
 import { Modal } from '@/components/ui/Modal'
 import { SkeletonDetail } from '@/components/ui/Skeleton'
 import { Textarea } from '@/components/ui/Textarea'
@@ -22,13 +24,7 @@ import { useToast } from '@/components/ui/Toast'
 import { useApiResource } from '@/hooks/useApiResource'
 import { useDocumentTitle } from '@/hooks/useDocumentTitle'
 import { useMutation } from '@/hooks/useMutation'
-import {
-  deadlineInfo,
-  formatBytes,
-  formatDateTime,
-  formatToman,
-  toPersianDigits,
-} from '@/lib/format'
+import { deadlineInfo, formatDateTime, formatToman, toPersianDigits } from '@/lib/format'
 import {
   complaintStatusMeta,
   metaOf,
@@ -37,7 +33,7 @@ import {
   taskStatusMeta,
 } from '@/lib/labels'
 import { AdminDeliveryList } from '../components/AdminDeliveryList'
-import type { AdminAttachment, AdminParticipant, AdminResolveInput } from '../api/types'
+import type { AdminParticipant, AdminResolveInput } from '../api/types'
 
 /** سه تصمیمی که بک‌اند در ResolveComplaintRequest می‌پذیرد */
 type DecisionKey = 'invalid' | 'valid-revision' | 'valid-cancel'
@@ -79,20 +75,34 @@ function toResolveInput(key: DecisionKey, adminResponse: string): AdminResolveIn
   }
 }
 
-function ParticipantCard({ title, person }: { title: string; person: AdminParticipant }) {
+function ParticipantCard({
+  title,
+  person,
+  onOpen,
+}: {
+  title: string
+  person: AdminParticipant
+  onOpen: () => void
+}) {
   return (
     <Card>
       <CardHeader title={title} />
       <CardBody className="space-y-3">
-        <div className="flex items-center gap-3">
-          <Avatar name={person.full_name} size="md" />
-          <div className="min-w-0">
+        {/* کلیک روی طرف پرونده، پروفایل کامل او را باز می‌کند (آواتار، رزومه، مشخصات) */}
+        <button
+          type="button"
+          onClick={onOpen}
+          className="-m-1 flex w-full items-center gap-3 rounded-xl p-1 text-start transition-colors hover:bg-ink-50"
+        >
+          <Avatar name={person.full_name} src={person.avatar} size="md" />
+          <div className="min-w-0 flex-1">
             <p className="truncate text-[13.5px] font-bold text-ink-800">{person.full_name}</p>
             <p className="truncate text-[11.5px] text-ink-400" dir="ltr">
               {person.mobile ? toPersianDigits(person.mobile) : '—'}
             </p>
           </div>
-        </div>
+          <IconUser className="size-4 shrink-0 text-ink-400" />
+        </button>
 
         <DetailList className="border-t border-ink-100 pt-1">
           <DetailRow
@@ -107,28 +117,6 @@ function ParticipantCard({ title, person }: { title: string; person: AdminPartic
   )
 }
 
-function AttachmentList({ files }: { files: AdminAttachment[] }) {
-  if (files.length === 0) {
-    return <p className="text-[13px] text-ink-400">فایلی پیوست نشده است.</p>
-  }
-
-  return (
-    <ul className="space-y-2">
-      {files.map((file) => (
-        <li
-          key={file.id}
-          className="flex items-center gap-2.5 rounded-xl border border-ink-200 p-3 text-[13px] text-ink-700"
-        >
-          <IconFile className="size-5 shrink-0 text-ink-400" />
-          <span className="min-w-0 flex-1 truncate">{file.original_name}</span>
-          <span className="shrink-0 text-[11.5px] text-ink-400">
-            {formatBytes(file.size)} · {file.mime_type}
-          </span>
-        </li>
-      ))}
-    </ul>
-  )
-}
 
 /** پروندهٔ کامل یک شکایت + شروع بررسی + ثبت نتیجه */
 export default function AdminComplaintDetailPage() {
@@ -143,6 +131,7 @@ export default function AdminComplaintDetailPage() {
 
   useDocumentTitle(resource.data ? `${resource.data.complaint.title} — ادمین` : 'شکایت — ادمین')
 
+  const [peek, setPeek] = useState<{ user: ProfilePeek; title: string } | null>(null)
   const [decision, setDecision] = useState<DecisionKey | null>(null)
   const [adminResponse, setAdminResponse] = useState('')
 
@@ -241,12 +230,31 @@ export default function AdminComplaintDetailPage() {
       </Card>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <ParticipantCard title="شاکی" person={complainant} />
-        <ParticipantCard title="طرف مقابل" person={other_party} />
+        <ParticipantCard
+          title="شاکی"
+          person={complainant}
+          onOpen={() => setPeek({ user: complainant, title: 'پروفایل شاکی' })}
+        />
+        <ParticipantCard
+          title="طرف مقابل"
+          person={other_party}
+          onOpen={() => setPeek({ user: other_party, title: 'پروفایل طرف مقابل' })}
+        />
       </div>
 
       <Card>
-        <CardHeader title="تسک" description={task?.category?.name} />
+        <CardHeader
+          title="تسک"
+          description={task?.category?.name}
+          action={
+            task?.id ? (
+              // GET /api/tasks/{id} عمومی است (بدون auth)، پس ادمین هم می‌تواند بازش کند
+              <LinkButton to={`/tasks/${task.id}`} size="sm" variant="outline">
+                باز کردن صفحهٔ تسک
+              </LinkButton>
+            ) : undefined
+          }
+        />
         <CardBody className="space-y-3">
           <p className="text-[14px] font-bold text-ink-900">{task?.title ?? '—'}</p>
           {task?.description ? (
@@ -271,6 +279,14 @@ export default function AdminComplaintDetailPage() {
               value={task ? <StatusBadge meta={metaOf(taskStatusMeta, task.status)} /> : '—'}
             />
           </DetailList>
+
+          <div className="border-t border-ink-100 pt-3">
+            <h3 className="mb-2 text-[13px] font-bold text-ink-800">فایل‌های تسک</h3>
+            <StoredFileList
+              files={task?.files ?? []}
+              empty="برای این تسک فایلی پیوست نشده است."
+            />
+          </div>
         </CardBody>
       </Card>
 
@@ -288,7 +304,39 @@ export default function AdminComplaintDetailPage() {
               label="تاریخ ارسال"
               value={application?.created_at ? formatDateTime(application.created_at) : '—'}
             />
+            <DetailRow
+              label="متقاضی"
+              value={
+                application?.user_id ? (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setPeek({
+                        user:
+                          application.user_id === complainant.id ? complainant : other_party,
+                        title: 'پروفایل متقاضی',
+                      })
+                    }
+                    className="font-semibold text-brand-600 hover:underline"
+                  >
+                    {application.user_id === complainant.id
+                      ? complainant.full_name
+                      : other_party.full_name}
+                  </button>
+                ) : (
+                  '—'
+                )
+              }
+            />
           </DetailList>
+
+          <div className="border-t border-ink-100 pt-3">
+            <h3 className="mb-2 text-[13px] font-bold text-ink-800">فایل‌های درخواست همکاری</h3>
+            <StoredFileList
+              files={application?.files ?? []}
+              empty="به این درخواست فایلی پیوست نشده است."
+            />
+          </div>
         </CardBody>
       </Card>
 
@@ -338,14 +386,11 @@ export default function AdminComplaintDetailPage() {
           title="فایل‌های شکایت"
           description="مدارکی که شاکی همراه شکایت ارسال کرده است"
         />
-        <CardBody className="space-y-3">
-          <AttachmentList files={complaintFiles} />
-          {complaintFiles.length > 0 ? (
-            <p className="text-[11.5px] leading-6 text-ink-400">
-              بک‌اند برای فایل‌های پیوست در مسیرهای ادمین نشانی دانلود برنمی‌گرداند، بنابراین اینجا
-              فقط مشخصات فایل نمایش داده می‌شود.
-            </p>
-          ) : null}
+        <CardBody>
+          <StoredFileList
+            files={complaintFiles}
+            empty="مدرکی همراه این شکایت ارسال نشده است."
+          />
         </CardBody>
       </Card>
 
@@ -426,6 +471,18 @@ export default function AdminComplaintDetailPage() {
           <b>{metaOf(projectStatusMeta, project.status).label}</b>
         </Alert>
       ) : null}
+
+      {/*
+        پروفایل طرفین پرونده — AdminComplaintController::show برای هر دو نفر
+        full_name, avatar, mobile, student_number, field_of_study, university_name
+        را برمی‌گرداند. رزومه در این پاسخ نیست (به گزارش بک‌اند مراجعه کنید).
+      */}
+      <UserProfileDialog
+        open={peek !== null}
+        onClose={() => setPeek(null)}
+        user={peek?.user ?? null}
+        title={peek?.title ?? 'پروفایل کاربر'}
+      />
 
       <Modal
         open={decision !== null}

@@ -45,7 +45,7 @@ export function SideNav() {
           to="/profile"
           className="mt-3 flex items-center gap-3 rounded-xl border border-ink-200 p-2.5 transition-colors hover:bg-ink-50"
         >
-          <Avatar name={user.full_name} size="sm" />
+          <Avatar name={user.full_name} src={user.avatar} size="sm" />
           <span className="min-w-0 flex-1">
             <span className="block truncate text-[13px] font-bold text-ink-800">{user.full_name}</span>
             <span className="block truncate text-[11px] text-ink-400">

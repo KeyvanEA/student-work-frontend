@@ -21,7 +21,7 @@ export function ProjectCard({ project }: { project: ProjectListItem }) {
       className="group block rounded-2xl border border-ink-200/80 bg-white p-4 shadow-[var(--shadow-soft)] transition-all hover:border-brand-200 hover:shadow-[var(--shadow-lift)]"
     >
       <div className="flex items-start gap-3">
-        <Avatar name={project.other_user?.full_name} size="md" />
+        <Avatar name={project.other_user?.full_name} src={project.other_user?.avatar} size="md" />
         <div className="min-w-0 flex-1">
           <h3 className="truncate text-[15px] font-bold text-ink-900 group-hover:text-brand-700">
             {project.title}

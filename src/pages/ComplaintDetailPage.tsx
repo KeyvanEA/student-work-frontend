@@ -4,16 +4,17 @@ import { ApiError } from '@/api/client'
 import { fetchComplaint } from '@/api/complaints'
 import { DetailList, DetailRow } from '@/components/domain/DetailList'
 import { StatusBadge } from '@/components/domain/StatusBadge'
+import { StoredFileList } from '@/components/domain/StoredFileRow'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Alert } from '@/components/ui/Alert'
 import { LinkButton } from '@/components/ui/Button'
 import { Card, CardBody, CardHeader } from '@/components/ui/Card'
 import { ErrorState } from '@/components/ui/ErrorState'
-import { IconClock, IconFile, IconPackage } from '@/components/ui/Icons'
+import { IconClock, IconPackage } from '@/components/ui/Icons'
 import { SkeletonDetail } from '@/components/ui/Skeleton'
 import { useApiResource } from '@/hooks/useApiResource'
 import { useDocumentTitle } from '@/hooks/useDocumentTitle'
-import { formatBytes, formatDateTime, toPersianDigits } from '@/lib/format'
+import { formatDateTime, toPersianDigits } from '@/lib/format'
 import { complaintStatusMeta, metaOf } from '@/lib/labels'
 
 /** جزئیات یک شکایت — GET /api/complaints/{id} (فقط برای ثبت‌کنندهٔ شکایت) */
@@ -125,36 +126,13 @@ export default function ComplaintDetailPage() {
         <Card>
           <CardHeader title="مدارک پیوست" description="فایل‌هایی که همراه شکایت ارسال کرده‌اید" />
           <CardBody>
-            <ul className="space-y-2">
-              {files.map((file) => (
-                <li
-                  key={file.id}
-                  className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-ink-200 p-3"
-                >
-                  <span className="flex min-w-0 items-center gap-2.5">
-                    <IconFile className="size-5 shrink-0 text-ink-400" />
-                    <span className="min-w-0">
-                      <span className="block truncate text-[13px] font-semibold text-ink-700">
-                        {file.original_name}
-                      </span>
-                      <span className="block text-[11.5px] text-ink-400">
-                        {formatBytes(file.size)} · {file.mime_type}
-                      </span>
-                    </span>
-                  </span>
-                  {file.download_url ? (
-                    <a
-                      href={file.download_url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="shrink-0 text-[12.5px] font-semibold text-brand-600 hover:underline"
-                    >
-                      باز کردن
-                    </a>
-                  ) : null}
-                </li>
-              ))}
-            </ul>
+            {/*
+              ⚠️ ComplaintController::show نشانی را با Storage::url() می‌سازد که
+              *نسبی* است (/storage/…). قبلاً همین href مستقیم رندر می‌شد و مرورگر
+              آن را نسبت به origin فرانت حل می‌کرد → ۴۰۴. StoredFileList همیشه
+              نشانی را نسبت به API_BASE_URL مطلق می‌کند.
+            */}
+            <StoredFileList files={files} />
           </CardBody>
         </Card>
       ) : null}

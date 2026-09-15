@@ -10,6 +10,7 @@ import { DeliveryListRow } from '@/components/domain/DeliveryListRow'
 import { DetailList, DetailRow } from '@/components/domain/DetailList'
 import { FlowStepper, PROJECT_FLOW_STEPS, projectFlowIndex } from '@/components/domain/FlowStepper'
 import { StatusBadge } from '@/components/domain/StatusBadge'
+import { UserProfileDialog, type ProfilePeek } from '@/components/domain/UserProfileDialog'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Alert } from '@/components/ui/Alert'
 import { Avatar } from '@/components/ui/Avatar'
@@ -57,6 +58,7 @@ export default function ProjectDetailPage() {
   const [deliveryOpen, setDeliveryOpen] = useState(false)
   const [paymentOpen, setPaymentOpen] = useState(false)
   const [complaintOpen, setComplaintOpen] = useState(false)
+  const [peek, setPeek] = useState<{ user: ProfilePeek; title: string } | null>(null)
   const [reviewChoice, setReviewChoice] = useState<boolean | null>(null)
   const [reviewSubmitted, setReviewSubmitted] = useState(false)
 
@@ -281,33 +283,26 @@ export default function ProjectDetailPage() {
         </CardBody>
       </Card>
 
-      {/* طرفین پروژه */}
+      {/*
+        طرفین پروژه — در هر وضعیتی (فعال، تحویل‌شده، نیازمند اصلاح، تکمیل، پرداخت‌شده،
+        تاریخچه) هر دو طرف قابل مشاهده‌اند. بک‌اند هر دو کاربر را در پاسخ پروژه
+        برمی‌گرداند: application.user (کارجو) و application.task.user (کارفرما).
+      */}
       <div className="grid gap-4 sm:grid-cols-2">
-        <Card>
-          <CardHeader title="کارفرما" />
-          <CardBody className="flex items-center gap-3">
-            <Avatar name={employer?.full_name} size="md" />
-            <div className="min-w-0">
-              <p className="truncate text-[13.5px] font-bold text-ink-800">
-                {employer?.full_name ?? '—'}
-              </p>
-              <p className="text-[11.5px] text-ink-400">ثبت‌کنندهٔ تسک</p>
-            </div>
-          </CardBody>
-        </Card>
-
-        <Card>
-          <CardHeader title="کارجو" />
-          <CardBody className="flex items-center gap-3">
-            <Avatar name={worker?.full_name} size="md" />
-            <div className="min-w-0">
-              <p className="truncate text-[13.5px] font-bold text-ink-800">
-                {worker?.full_name ?? '—'}
-              </p>
-              <p className="text-[11.5px] text-ink-400">انجام‌دهندهٔ کار</p>
-            </div>
-          </CardBody>
-        </Card>
+        <ProjectPartyCard
+          title="کارفرما"
+          caption="ثبت‌کنندهٔ تسک"
+          person={employer}
+          isYou={isEmployer}
+          onOpen={(user) => setPeek({ user, title: 'پروفایل کارفرما' })}
+        />
+        <ProjectPartyCard
+          title="کارجو"
+          caption="انجام‌دهندهٔ کار"
+          person={worker}
+          isYou={isWorker}
+          onOpen={(user) => setPeek({ user, title: 'پروفایل کارجو' })}
+        />
       </div>
 
       {/* تسک مرتبط */}
@@ -660,6 +655,13 @@ export default function ProjectDetailPage() {
         </div>
       </Modal>
 
+      <UserProfileDialog
+        open={peek !== null}
+        onClose={() => setPeek(null)}
+        user={peek?.user ?? null}
+        title={peek?.title ?? 'پروفایل کاربر'}
+      />
+
       <ConfirmDialog
         open={paymentOpen}
         title="تایید پرداخت دستمزد"
@@ -694,5 +696,48 @@ export default function ProjectDetailPage() {
         onCancel={() => setReviewChoice(null)}
       />
     </div>
+  )
+}
+
+/** کارت یک طرف پروژه؛ کلیک روی آن پروفایل همان کاربر را باز می‌کند. */
+function ProjectPartyCard({
+  title,
+  caption,
+  person,
+  isYou,
+  onOpen,
+}: {
+  title: string
+  caption: string
+  person?: { id?: number; full_name?: string | null; avatar?: string | null } | null
+  isYou: boolean
+  onOpen: (user: ProfilePeek) => void
+}) {
+  const canOpen = Boolean(person?.id)
+
+  return (
+    <Card>
+      <CardHeader title={title} />
+      <CardBody className="p-0">
+        <button
+          type="button"
+          disabled={!canOpen}
+          onClick={() => person?.id && onOpen({ ...person, id: person.id })}
+          className="flex w-full items-center gap-3 p-4 text-start transition-colors enabled:hover:bg-ink-50 disabled:cursor-default sm:p-5"
+        >
+          <Avatar name={person?.full_name} src={person?.avatar} size="md" />
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-[13.5px] font-bold text-ink-800">
+              {person?.full_name ?? '—'}
+              {isYou ? <span className="ms-1.5 text-[11px] text-ink-400">(شما)</span> : null}
+            </p>
+            <p className="text-[11.5px] text-ink-400">
+              {caption}
+              {canOpen ? ' · مشاهده پروفایل' : ''}
+            </p>
+          </div>
+        </button>
+      </CardBody>
+    </Card>
   )
 }

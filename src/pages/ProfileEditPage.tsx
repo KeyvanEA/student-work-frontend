@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { storedFileUrl } from '@/api/files'
 import { fetchProfile, fetchSkills, updateMySkills, updateProfile } from '@/api/profile'
 import { useAuth } from '@/auth/AuthContext'
 import { SkillPicker } from '@/components/domain/SkillPicker'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Alert } from '@/components/ui/Alert'
+import { Avatar } from '@/components/ui/Avatar'
 import { Button } from '@/components/ui/Button'
 import { Card, CardBody, CardHeader } from '@/components/ui/Card'
 import { ErrorState } from '@/components/ui/ErrorState'
@@ -57,6 +59,7 @@ export default function ProfileEditPage() {
     setSelectedSkills((profile.data.skills ?? []).map((skill) => skill.id))
   }, [profile.data])
 
+  const currentResumeUrl = storedFileUrl(profile.data?.resume_file)
   const studentNumber = toEnglishDigits(form.student_number).trim()
 
   const errors = {
@@ -238,21 +241,37 @@ export default function ProfileEditPage() {
           <CardHeader title="تصویر پروفایل و رزومه" description="اختیاری" />
           <CardBody className="grid gap-4 sm:grid-cols-2">
             <Field label="تصویر پروفایل" hint="jpg / png / webp تا ۵ مگابایت" error={profileMutation.error?.fieldError('avatar')}>
-              <input
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                onChange={(event) => setAvatar(event.target.files?.[0] ?? null)}
-                className="block w-full text-[12.5px] text-ink-600 file:me-3 file:rounded-lg file:border-0 file:bg-ink-100 file:px-3 file:py-2 file:text-[12.5px] file:font-semibold file:text-ink-700 hover:file:bg-ink-200"
-              />
+              <div className="flex items-center gap-3">
+                {/* تصویر فعلی — تا کاربر ببیند آپلود قبلی واقعاً ذخیره شده است */}
+                <Avatar name={profile.data?.full_name} src={profile.data?.avatar} size="lg" />
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  onChange={(event) => setAvatar(event.target.files?.[0] ?? null)}
+                  className="block w-full text-[12.5px] text-ink-600 file:me-3 file:rounded-lg file:border-0 file:bg-ink-100 file:px-3 file:py-2 file:text-[12.5px] file:font-semibold file:text-ink-700 hover:file:bg-ink-200"
+                />
+              </div>
             </Field>
 
             <Field label="فایل رزومه" hint="فقط PDF تا ۱۰ مگابایت" error={profileMutation.error?.fieldError('resume_file')}>
-              <input
-                type="file"
-                accept="application/pdf"
-                onChange={(event) => setResume(event.target.files?.[0] ?? null)}
-                className="block w-full text-[12.5px] text-ink-600 file:me-3 file:rounded-lg file:border-0 file:bg-ink-100 file:px-3 file:py-2 file:text-[12.5px] file:font-semibold file:text-ink-700 hover:file:bg-ink-200"
-              />
+              <div className="space-y-2">
+                <input
+                  type="file"
+                  accept="application/pdf"
+                  onChange={(event) => setResume(event.target.files?.[0] ?? null)}
+                  className="block w-full text-[12.5px] text-ink-600 file:me-3 file:rounded-lg file:border-0 file:bg-ink-100 file:px-3 file:py-2 file:text-[12.5px] file:font-semibold file:text-ink-700 hover:file:bg-ink-200"
+                />
+                {currentResumeUrl ? (
+                  <a
+                    href={currentResumeUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-block text-[12.5px] font-semibold text-brand-600 hover:underline"
+                  >
+                    مشاهدهٔ رزومهٔ فعلی
+                  </a>
+                ) : null}
+              </div>
             </Field>
           </CardBody>
         </Card>

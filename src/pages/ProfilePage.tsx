@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { storedFileUrl } from '@/api/files'
 import { fetchProfile } from '@/api/profile'
 import { useAuth } from '@/auth/AuthContext'
 import { DetailList, DetailRow } from '@/components/domain/DetailList'
@@ -11,7 +12,7 @@ import { Button, LinkButton } from '@/components/ui/Button'
 import { Card, CardBody, CardHeader } from '@/components/ui/Card'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { ErrorState } from '@/components/ui/ErrorState'
-import { IconLogout } from '@/components/ui/Icons'
+import { IconDownload, IconFile, IconLogout } from '@/components/ui/Icons'
 import { SkeletonDetail } from '@/components/ui/Skeleton'
 import { useToast } from '@/components/ui/Toast'
 import { useApiResource } from '@/hooks/useApiResource'
@@ -61,6 +62,8 @@ export default function ProfilePage() {
   }
 
   const user = profile.data
+  const resumeUrl = storedFileUrl(user.resume_file)
+  const resumeName = user.resume_file?.split('/').pop() ?? 'resume.pdf'
   const incomplete = !user.full_name || !user.student_number || !user.field_of_study || !user.university_name
 
   return (
@@ -88,7 +91,7 @@ export default function ProfilePage() {
 
       <Card>
         <CardBody className="flex items-center gap-4">
-          <Avatar name={user.full_name} size="lg" />
+          <Avatar name={user.full_name} src={user.avatar} size="lg" />
           <div className="min-w-0">
             <h2 className="truncate text-lg font-extrabold text-ink-900">{user.full_name}</h2>
             <p className="mt-0.5 truncate text-[12.5px] text-ink-500">
@@ -147,8 +150,29 @@ export default function ProfilePage() {
       <Card>
         <CardHeader title="رزومه" />
         <CardBody>
-          {user.resume_file ? (
-            <p className="text-[13px] text-ink-600">فایل رزومه آپلود شده است.</p>
+          {/*
+            بک‌اند فقط ستون `resume_file` (مسیر ذخیره‌سازی) را می‌دهد و هیچ accessor ای
+            برای نشانی دانلود ندارد. همان قرارداد Storage::url() که خود بک‌اند برای
+            سایر فایل‌ها استفاده می‌کند اینجا هم اعمال می‌شود.
+          */}
+          {resumeUrl ? (
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <span className="flex min-w-0 items-center gap-2.5">
+                <IconFile className="size-5 shrink-0 text-ink-400" />
+                <span className="truncate text-[13px] text-ink-700" dir="ltr">
+                  {resumeName}
+                </span>
+              </span>
+              <a
+                href={resumeUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-xl border border-brand-200 px-3.5 text-[13px] font-semibold text-brand-700 hover:bg-brand-50"
+              >
+                <IconDownload className="size-4" />
+                دانلود رزومه
+              </a>
+            </div>
           ) : (
             <p className="text-[13px] text-ink-400">هنوز رزومه‌ای آپلود نکرده‌اید.</p>
           )}

@@ -1,6 +1,55 @@
-import { apiRequestBlob, ApiError } from './client'
+import { API_BASE_URL, apiRequestBlob, ApiError } from './client'
 import { endpoints } from './endpoints'
 import type { DeliveryFile } from '@/types/models'
+
+/**
+ * ─────────────────────────────────────────────────────────────────────────────
+ *  تنها استراتژی ساخت نشانی فایل در کل اپ
+ * ─────────────────────────────────────────────────────────────────────────────
+ *
+ * بک‌اند برای فایل‌ها سه شکل مختلف برمی‌گرداند و همین باعث خرابی می‌شد:
+ *
+ *  ۱) URL مطلق   — TaskController::show و ApplicationController::show
+ *                   `url(Storage::url($path))` → http://host/storage/…
+ *  ۲) مسیر نسبی  — ComplaintController::show و ProjectController::show
+ *                   `Storage::url($path)` → /storage/…
+ *                   ⚠️ مرورگر این را نسبت به origin *فرانت* حل می‌کند، نه بک‌اند → ۴۰۴
+ *  ۳) مسیر خام Storage — avatar، resume_file و فایل‌های مسیرهای ادمین
+ *                   مثل `users/avatars/x.jpg` (اصلاً URL نیست)
+ *
+ * این تابع هر سه را به یک URL مطلق و قابل استفاده در مرورگر تبدیل می‌کند.
+ * شکل `/storage/{path}` اختراع فرانت نیست: همان چیزی است که خود بک‌اند با
+ * `Storage::url()` تولید می‌کند (disk=local با `'serve' => true` در
+ * config/filesystems.php مسیر /storage/{path} را serve می‌کند).
+ *
+ * ⚠️ فایل‌های «تحویل پروژه» عمداً از این مسیر نمی‌گذرند: بک‌اند برای آن‌ها هیچ نشانی
+ * Storage منتشر نمی‌کند و دسترسی را پشت endpointهای احراز هویت‌شده نگه داشته است
+ * (از جمله قانون «کارفرما فقط بعد از پرداخت»). ساختن /storage برای آن‌ها یعنی دور
+ * زدن مجوز بک‌اند — و انجام نمی‌شود.
+ */
+export function storedFileUrl(value?: string | null): string | null {
+  const raw = value?.trim()
+  if (!raw) return null
+  if (/^https?:\/\//i.test(raw)) return raw
+  if (raw.startsWith('/')) return `${API_BASE_URL}${raw}`
+  return `${API_BASE_URL}/storage/${raw.replace(/^storage\//, '')}`
+}
+
+/**
+ * نام قابل نمایش یک فایل.
+ * جدول‌های task_files و application_files ستون original_name ندارند، پس برای آن‌ها
+ * فقط نام ذخیره‌شده (hash + پسوند) در دسترس است.
+ */
+export function storedFileName(file: {
+  original_name?: string | null
+  file_path?: string | null
+  download_url?: string | null
+}): string {
+  if (file.original_name) return file.original_name
+  const source = file.file_path || file.download_url || ''
+  const name = source.split('?')[0].split('/').pop()
+  return name || 'فایل'
+}
 
 /**
  * فرانت هرگز مسیر داخلی Storage را حدس نمی‌زند.
@@ -42,7 +91,16 @@ export class PopupBlockedError extends Error {
  * بک‌اند برای preview هدر Content-Disposition: inline می‌فرستد؛ این رفتار حفظ می‌شود.
  */
 export async function openDeliveryFilePreview(file: DeliveryFile, deliveryId: number | string) {
-  const opened = window.open('', '_blank', 'noopener,noreferrer')
+  /**
+   * ⚠️ بدون `noopener,noreferrer`.
+   * کروم وقتی این ویژگی‌ها پاس داده شوند تب را *باز می‌کند* ولی `null` برمی‌گرداند
+   * (چون رابطهٔ opener عمداً قطع می‌شود). نتیجه دقیقاً همان باگ گزارش‌شده بود:
+   * یک تب about:blank باز می‌ماند و چون مرجع پنجره null است، نه می‌شود چیزی در آن
+   * نوشت و نه location اش را به Blob URL تغییر داد.
+   * ارجاع به پنجره لازم است، پس ویژگی‌ها حذف شده و بلافاصله پس از ناوبری،
+   * opener خودِ تب پاک می‌شود تا همان محافظت برقرار بماند.
+   */
+  const opened = window.open('', '_blank')
   if (!opened) throw new PopupBlockedError()
 
   // یک نشانهٔ سادهٔ «در حال بارگذاری» تا پنجره خالی و گیج‌کننده نماند
@@ -69,6 +127,12 @@ export async function openDeliveryFilePreview(file: DeliveryFile, deliveryId: nu
   }
 
   opened.location.href = url
+  // همان محافظتی که noopener می‌داد، بدون از دست دادن مرجع پنجره
+  try {
+    opened.opener = null
+  } catch {
+    /* بعضی مرورگرها اجازهٔ نوشتن روی opener را نمی‌دهند */
+  }
   // فرصت بارگذاری به تب جدید می‌دهیم و بعد آبجکت را آزاد می‌کنیم
   window.setTimeout(() => URL.revokeObjectURL(url), 60_000)
 }

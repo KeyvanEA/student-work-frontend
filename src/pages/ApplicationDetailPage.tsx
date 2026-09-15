@@ -6,6 +6,8 @@ import { useAuth } from '@/auth/AuthContext'
 import { DetailList, DetailRow } from '@/components/domain/DetailList'
 import { SkillChips } from '@/components/domain/SkillChips'
 import { StatusBadge } from '@/components/domain/StatusBadge'
+import { StoredFileList } from '@/components/domain/StoredFileRow'
+import { UserProfileDialog } from '@/components/domain/UserProfileDialog'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Alert } from '@/components/ui/Alert'
 import { Avatar } from '@/components/ui/Avatar'
@@ -13,7 +15,7 @@ import { Button, LinkButton } from '@/components/ui/Button'
 import { Card, CardBody, CardHeader } from '@/components/ui/Card'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { ErrorState } from '@/components/ui/ErrorState'
-import { IconClock, IconFile, IconTasks } from '@/components/ui/Icons'
+import { IconClock, IconTasks, IconUser } from '@/components/ui/Icons'
 import { SkeletonDetail } from '@/components/ui/Skeleton'
 import { useToast } from '@/components/ui/Toast'
 import { useApiResource } from '@/hooks/useApiResource'
@@ -35,6 +37,7 @@ export default function ApplicationDetailPage() {
   )
   const application = useApiResource(loader, [applicationId])
 
+  const [profileOpen, setProfileOpen] = useState(false)
   const [action, setAction] = useState<'accept' | 'reject' | null>(null)
 
   const acceptMutation = useMutation(() => acceptApplication(applicationId), {
@@ -108,12 +111,24 @@ export default function ApplicationDetailPage() {
       <Card>
         <CardBody className="space-y-4">
           <div className="flex items-start gap-3">
-            <Avatar name={data.user?.full_name} size="lg" />
+            <button
+              type="button"
+              onClick={() => setProfileOpen(true)}
+              aria-label="مشاهده پروفایل"
+              className="rounded-full transition-opacity hover:opacity-80"
+            >
+              <Avatar name={data.user?.full_name} src={data.user?.avatar} size="lg" />
+            </button>
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-[16px] font-bold text-ink-900">
+                <button
+                  type="button"
+                  onClick={() => setProfileOpen(true)}
+                  className="inline-flex items-center gap-1.5 text-[16px] font-bold text-ink-900 hover:text-brand-700"
+                >
                   {data.user?.full_name ?? `کاربر ${toPersianDigits(data.user_id)}`}
-                </h2>
+                  <IconUser className="size-4 text-ink-400" />
+                </button>
                 <StatusBadge meta={meta} />
               </div>
               <p className="mt-1 text-[11.5px] text-ink-400">
@@ -142,31 +157,8 @@ export default function ApplicationDetailPage() {
             title="نمونه‌کارها و پیوست‌ها"
             description="نشانی فایل‌ها را خود بک‌اند در پاسخ می‌دهد."
           />
-          <CardBody className="space-y-2">
-            {data.files.map((file) => (
-              <div
-                key={file.id}
-                className="flex items-center justify-between gap-3 rounded-xl border border-ink-200 p-3"
-              >
-                <span className="flex min-w-0 items-center gap-2.5">
-                  <IconFile className="size-5 shrink-0 text-ink-400" />
-                  <span className="truncate text-[13px] text-ink-700" dir="ltr">
-                    {file.file_path.split('/').pop()}
-                  </span>
-                </span>
-                {file.download_url ? (
-                  <a
-                    href={file.download_url}
-                    download
-                    className="shrink-0 text-[12.5px] font-semibold text-brand-600 hover:underline"
-                  >
-                    دانلود
-                  </a>
-                ) : (
-                  <span className="shrink-0 text-[12px] text-ink-400">نشانی فایل موجود نیست</span>
-                )}
-              </div>
-            ))}
+          <CardBody>
+            <StoredFileList files={data.files} />
           </CardBody>
         </Card>
       ) : null}
@@ -227,6 +219,18 @@ export default function ApplicationDetailPage() {
           </div>
         </Alert>
       ) : null}
+
+      {/*
+        پروفایل طرف مقابل — بک‌اند در پاسخ همین درخواست، متقاضی را همراه مهارت‌هایش
+        برمی‌گرداند (ApplicationController::show → user + user.skills).
+        مالک تسک و خود متقاضی هر دو اجازهٔ دیدن این پاسخ را دارند.
+      */}
+      <UserProfileDialog
+        open={profileOpen}
+        onClose={() => setProfileOpen(false)}
+        user={data.user ? { ...data.user, id: data.user.id ?? data.user_id } : { id: data.user_id }}
+        title={isApplicant ? 'پروفایل شما در این درخواست' : 'پروفایل متقاضی'}
+      />
 
       <ConfirmDialog
         open={action === 'accept'}

@@ -61,7 +61,7 @@ export function PublicHeader() {
                 aria-label="پروفایل من"
                 className="flex items-center gap-2 rounded-xl border border-ink-200 px-2.5 py-1.5 transition-colors hover:bg-ink-50"
               >
-                <Avatar name={user.full_name} size="sm" />
+                <Avatar name={user.full_name} src={user.avatar} size="sm" />
                 <span className="max-w-28 truncate text-[12.5px] font-semibold text-ink-700">
                   {user.full_name}
                 </span>

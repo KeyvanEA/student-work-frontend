@@ -8,6 +8,8 @@ import { useAuth } from '@/auth/AuthContext'
 import { DetailList, DetailRow } from '@/components/domain/DetailList'
 import { SkillChips } from '@/components/domain/SkillChips'
 import { StatusBadge } from '@/components/domain/StatusBadge'
+import { StoredFileList } from '@/components/domain/StoredFileRow'
+import { UserProfileDialog } from '@/components/domain/UserProfileDialog'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Alert } from '@/components/ui/Alert'
 import { Avatar } from '@/components/ui/Avatar'
@@ -17,7 +19,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { ErrorState } from '@/components/ui/ErrorState'
 import { Field } from '@/components/ui/Field'
 import { FileInput } from '@/components/ui/FileInput'
-import { IconClock, IconFile, IconMoney, IconTasks, IconUser } from '@/components/ui/Icons'
+import { IconClock, IconMoney, IconTasks, IconUser } from '@/components/ui/Icons'
 import { Modal } from '@/components/ui/Modal'
 import { SkeletonDetail } from '@/components/ui/Skeleton'
 import { Textarea } from '@/components/ui/Textarea'
@@ -41,6 +43,7 @@ export default function TaskDetailPage() {
 
   const [applyOpen, setApplyOpen] = useState(false)
   const [cancelOpen, setCancelOpen] = useState(false)
+  const [employerOpen, setEmployerOpen] = useState(false)
   const [description, setDescription] = useState('')
   const [files, setFiles] = useState<File[]>([])
 
@@ -122,15 +125,24 @@ export default function TaskDetailPage() {
 
       <Card>
         <CardBody className="space-y-4">
-          <div className="flex items-center gap-3 border-b border-ink-100 pb-4">
-            <Avatar name={data.user?.full_name} size="md" />
-            <div className="min-w-0">
+          {/* کارفرما — پروفایل او از همان داده‌ای که بک‌اند در پاسخ تسک داده باز می‌شود */}
+          <button
+            type="button"
+            onClick={() => setEmployerOpen(true)}
+            disabled={!data.user}
+            className="-m-1 flex w-full items-center gap-3 rounded-xl border-b border-ink-100 p-1 pb-4 text-start transition-colors enabled:hover:bg-ink-50 disabled:cursor-default"
+          >
+            <Avatar name={data.user?.full_name} src={data.user?.avatar} size="md" />
+            <div className="min-w-0 flex-1">
               <p className="truncate text-[14px] font-bold text-ink-900">
                 {data.user?.full_name ?? 'کارفرما'}
               </p>
-              <p className="text-[11.5px] text-ink-400">کارفرمای این تسک</p>
+              <p className="text-[11.5px] text-ink-400">
+                کارفرمای این تسک{data.user ? ' · مشاهده پروفایل' : ''}
+              </p>
             </div>
-          </div>
+            {data.user ? <IconUser className="size-4 shrink-0 text-ink-400" /> : null}
+          </button>
 
           <div>
             <h2 className="mb-1.5 text-[14px] font-bold text-ink-900">شرح کار</h2>
@@ -185,31 +197,8 @@ export default function TaskDetailPage() {
             title="فایل‌های پیوست تسک"
             description="نشانی کامل فایل را خود بک‌اند در پاسخ می‌دهد."
           />
-          <CardBody className="space-y-2">
-            {data.files.map((file) => (
-              <div
-                key={file.id}
-                className="flex items-center justify-between gap-3 rounded-xl border border-ink-200 p-3"
-              >
-                <span className="flex min-w-0 items-center gap-2.5">
-                  <IconFile className="size-5 shrink-0 text-ink-400" />
-                  <span className="truncate text-[13px] text-ink-700" dir="ltr">
-                    {file.file_path.split('/').pop()}
-                  </span>
-                </span>
-                {file.download_url ? (
-                  <a
-                    href={file.download_url}
-                    download
-                    className="shrink-0 text-[12.5px] font-semibold text-brand-600 hover:underline"
-                  >
-                    دانلود
-                  </a>
-                ) : (
-                  <span className="shrink-0 text-[12px] text-ink-400">نشانی فایل موجود نیست</span>
-                )}
-              </div>
-            ))}
+          <CardBody>
+            <StoredFileList files={data.files} />
           </CardBody>
         </Card>
       ) : null}
@@ -299,6 +288,13 @@ export default function TaskDetailPage() {
           </Field>
         </div>
       </Modal>
+
+      <UserProfileDialog
+        open={employerOpen}
+        onClose={() => setEmployerOpen(false)}
+        user={data.user ? { ...data.user, id: data.user.id ?? data.user_id } : null}
+        title="پروفایل کارفرما"
+      />
 
       <ConfirmDialog
         open={cancelOpen}
